@@ -26,6 +26,28 @@ class EditorTheme:
     function: str
     class_name: str
     decorator: str
+    # UI chrome colors (optional - derived from background if not set)
+    chrome_bg: str = ""
+    chrome_hover: str = ""
+    chrome_border: str = ""
+
+    def __post_init__(self):
+        """Derive chrome colors from background if not explicitly set."""
+        if not self.chrome_bg:
+            self.chrome_bg = self._lighten(self.background, 15)
+        if not self.chrome_hover:
+            self.chrome_hover = self._lighten(self.background, 25)
+        if not self.chrome_border:
+            self.chrome_border = self._lighten(self.background, 20)
+
+    @staticmethod
+    def _lighten(hex_color: str, amount: int) -> str:
+        """Lighten a hex color by amount (0-255)."""
+        hex_color = hex_color.lstrip("#")
+        r = min(255, int(hex_color[0:2], 16) + amount)
+        g = min(255, int(hex_color[2:4], 16) + amount)
+        b = min(255, int(hex_color[4:6], 16) + amount)
+        return f"#{r:02X}{g:02X}{b:02X}"
 
 
 # Built-in themes
@@ -125,6 +147,10 @@ THEMES: dict[str, EditorTheme] = {
         function="#7FBFB5",
         class_name="#D4A84B",
         decorator="#C45C5C",
+        # Metropolis green UI chrome
+        chrome_bg="#122424",
+        chrome_hover="#1A3333",
+        chrome_border="#2D5A5A",
     ),
 }
 

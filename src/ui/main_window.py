@@ -9,6 +9,7 @@ from PyQt6.QtCore import QSettings, Qt, QTimer
 from PyQt6.QtGui import (
     QAction,
     QActionGroup,
+    QIcon,
     QKeySequence,
 )
 from PyQt6.QtWidgets import (
@@ -23,6 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core.recent_files import RecentFilesManager
+from core.settings import SettingsManager
 from syntax.highlighter import Language
 from ui.custom_tab_bar import CustomTabBar
 from ui.editor_tab import EditorTab
@@ -35,9 +37,10 @@ class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.settings = QSettings("MyNotion", "Editor")
+        self.settings_manager = SettingsManager()
         self.recent_files = RecentFilesManager(self)
 
-        self._apply_dark_theme()
+        self._apply_theme()
         self._setup_ui()
         self._setup_menus()
         self._setup_toolbar()
@@ -50,108 +53,123 @@ class MainWindow(QMainWindow):
         # Create initial tab
         self.new_tab()
 
-    def _apply_dark_theme(self):
-        """Apply dark theme to the entire application."""
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #1E1E1E;
-            }
-            QMenuBar {
-                background-color: #2D2D30;
-                color: #CCCCCC;
+    def _apply_theme(self):
+        """Apply current theme to the entire application."""
+        theme = self.settings_manager.get_current_theme()
+
+        # Use theme's chrome colors
+        bg = theme.background
+        chrome_bg = theme.chrome_bg
+        chrome_hover = theme.chrome_hover
+        chrome_border = theme.chrome_border
+        fg = theme.foreground
+        selection = theme.selection
+
+        self.setStyleSheet(f"""
+            QMainWindow {{
+                background-color: {bg};
+            }}
+            QMenuBar {{
+                background-color: {chrome_bg};
+                color: {fg};
                 border: none;
                 padding: 2px;
-            }
-            QMenuBar::item {
+            }}
+            QMenuBar::item {{
                 padding: 4px 8px;
                 background-color: transparent;
-            }
-            QMenuBar::item:selected {
-                background-color: #3E3E42;
-            }
-            QMenu {
-                background-color: #2D2D30;
-                color: #CCCCCC;
-                border: 1px solid #3C3C3C;
+            }}
+            QMenuBar::item:selected {{
+                background-color: {chrome_hover};
+            }}
+            QMenu {{
+                background-color: {chrome_bg};
+                color: {fg};
+                border: 1px solid {chrome_border};
                 padding: 4px 0px;
-            }
-            QMenu::item {
+            }}
+            QMenu::item {{
                 padding: 6px 30px 6px 20px;
-            }
-            QMenu::item:selected {
-                background-color: #094771;
-            }
-            QMenu::separator {
+            }}
+            QMenu::item:selected {{
+                background-color: {selection};
+            }}
+            QMenu::separator {{
                 height: 1px;
-                background-color: #3C3C3C;
+                background-color: {chrome_border};
                 margin: 4px 10px;
-            }
-            QToolBar {
-                background-color: #2D2D30;
+            }}
+            QToolBar {{
+                background-color: {chrome_bg};
                 border: none;
-                border-bottom: 1px solid #3C3C3C;
+                border-bottom: 1px solid {chrome_border};
                 spacing: 2px;
                 padding: 4px 8px;
-            }
-            QToolBar QToolButton {
+            }}
+            QToolBar QToolButton {{
                 background-color: transparent;
-                color: #CCCCCC;
+                color: {fg};
                 border: none;
                 border-radius: 3px;
                 padding: 4px 10px;
                 font-weight: bold;
                 font-size: 12px;
-            }
-            QToolBar QToolButton:hover {
-                background-color: #3E3E42;
-            }
-            QToolBar QToolButton:pressed {
-                background-color: #094771;
-            }
-            QTabWidget::pane {
+            }}
+            QToolBar QToolButton:hover {{
+                background-color: {chrome_hover};
+            }}
+            QToolBar QToolButton:pressed {{
+                background-color: {selection};
+            }}
+            QTabWidget::pane {{
                 border: none;
-                background-color: #1E1E1E;
-            }
-            QTabBar {
-                background-color: #2D2D30;
-            }
-            QTabBar::tab {
-                background-color: #2D2D30;
-                color: #9D9D9D;
+                background-color: {bg};
+            }}
+            QTabBar {{
+                background-color: {chrome_bg};
+            }}
+            QTabBar::tab {{
+                background-color: {chrome_bg};
+                color: {fg};
                 padding: 8px 20px;
                 border: none;
-                border-right: 1px solid #252526;
+                border-right: 1px solid {chrome_border};
                 min-width: 100px;
-            }
-            QTabBar::tab:selected {
-                background-color: #1E1E1E;
-                color: #FFFFFF;
-            }
-            QTabBar::tab:hover:!selected {
-                background-color: #3E3E42;
-            }
-            QStatusBar {
-                background-color: #2D2D30;
-                color: #CCCCCC;
-                border-top: 1px solid #3C3C3C;
-            }
-            QStatusBar::item {
+            }}
+            QTabBar::tab:selected {{
+                background-color: {bg};
+                color: {fg};
+            }}
+            QTabBar::tab:hover:!selected {{
+                background-color: {chrome_hover};
+            }}
+            QStatusBar {{
+                background-color: {chrome_bg};
+                color: {fg};
+                border-top: 1px solid {chrome_border};
+            }}
+            QStatusBar::item {{
                 border: none;
-            }
-            QStatusBar QLabel {
-                color: #CCCCCC;
+            }}
+            QStatusBar QLabel {{
+                color: {fg};
                 padding: 2px 12px;
                 font-size: 12px;
-            }
-            QStatusBar QLabel:hover {
-                background-color: #3E3E42;
-            }
+            }}
+            QStatusBar QLabel:hover {{
+                background-color: {chrome_hover};
+            }}
         """)
 
     def _setup_ui(self):
         """Initialize the main UI components."""
         self.setWindowTitle("MyNotion")
         self.setMinimumSize(300, 200)  # Allow small window like Notepad
+
+        # Set Moloch icon (Metropolis theme)
+        icon_path = Path(__file__).parent.parent.parent / "resources" / "moloch.ico"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
 
         # Tab widget for multiple documents
         self.tab_widget = QTabWidget(self)
@@ -173,19 +191,7 @@ class MainWindow(QMainWindow):
         self.new_tab_btn.setFixedSize(28, 28)
         self.new_tab_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.new_tab_btn.clicked.connect(self.new_tab)
-        self.new_tab_btn.setStyleSheet("""
-            QToolButton {
-                background-color: transparent;
-                color: #CCCCCC;
-                border: none;
-                font-size: 18px;
-                font-weight: bold;
-            }
-            QToolButton:hover {
-                background-color: #3E3E42;
-                border-radius: 3px;
-            }
-        """)
+        self._update_new_tab_button_style()
 
         # Connect tab changes to update + button position
         self.custom_tab_bar.tabInserted = self._wrap_tab_inserted(self.custom_tab_bar.tabInserted)
@@ -224,6 +230,23 @@ class MainWindow(QMainWindow):
             self.new_tab_btn.move(8, 4)
         self.new_tab_btn.raise_()
         self.new_tab_btn.show()
+
+    def _update_new_tab_button_style(self):
+        """Update + button style to match current theme."""
+        theme = self.settings_manager.get_current_theme()
+        self.new_tab_btn.setStyleSheet(f"""
+            QToolButton {{
+                background-color: transparent;
+                color: {theme.foreground};
+                border: none;
+                font-size: 18px;
+                font-weight: bold;
+            }}
+            QToolButton:hover {{
+                background-color: {theme.chrome_hover};
+                border-radius: 3px;
+            }}
+        """)
 
     def resizeEvent(self, event):
         """Handle resize to update + button position."""
@@ -639,7 +662,12 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
     def _apply_settings_to_editors(self):
-        """Apply changed settings to all editor tabs."""
+        """Apply changed settings to all editor tabs and window chrome."""
+        # Re-apply window theme (menu bar, toolbar, tabs, status bar)
+        self._apply_theme()
+        self._update_new_tab_button_style()
+
+        # Apply to all editor tabs
         for i in range(self.tab_widget.count()):
             editor = self.tab_widget.widget(i)
             if isinstance(editor, EditorTab):
