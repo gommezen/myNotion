@@ -1,0 +1,88 @@
+# =============================================================================
+# pyproject.toml — Tool configuration for MyNotion
+# =============================================================================
+
+[project]
+name = "mynotion"
+version = "0.1.0"
+description = "A lightweight text and code editor with local AI integration"
+requires-python = ">=3.11"
+
+# ── Ruff configuration ───────────────────────────────────────────────────────
+# Ruff handles both formatting (replaces black) and linting (replaces flake8).
+# Docs: https://docs.astral.sh/ruff/configuration/
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100                         # Slightly wider than PEP8's 79 — better for Qt signal/slot signatures
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes (undefined names, unused imports)
+    "I",      # isort (import sorting)
+    "N",      # pep8-naming (class/function naming conventions)
+    "UP",     # pyupgrade (modernize syntax for target Python version)
+    "B",      # flake8-bugbear (common pitfalls and design problems)
+    "SIM",    # flake8-simplify (simplifiable constructs)
+    "TCH",    # flake8-type-checking (move imports into TYPE_CHECKING blocks)
+    "RUF",    # ruff-specific rules
+]
+ignore = [
+    "E501",   # Line too long — handled by formatter, not linter
+    "B008",   # Do not perform function call in argument defaults — common in Qt
+    "N802",   # Function name should be lowercase — Qt overrides like paintEvent must keep their names
+    "RUF012", # Mutable class attributes should use ClassVar — not needed for simple cases
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]               # Treat src/ as first-party for import sorting
+
+[tool.ruff.format]
+quote-style = "double"                    # Consistent with PEP 8 examples
+indent-style = "space"
+
+# ── Mypy configuration ──────────────────────────────────────────────────────
+# Static type checker. Catches type mismatches that ruff can't detect.
+# Docs: https://mypy.readthedocs.io/en/stable/config_file.html
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = false                   # PyQt6 returns Any frequently
+warn_unused_configs = true
+disallow_untyped_defs = false             # Start lenient — tighten over time
+ignore_missing_imports = true             # Many Qt stubs are incomplete
+check_untyped_defs = true                 # Still check bodies of untyped functions
+# Disable common PyQt6 type errors that are false positives
+disable_error_code = ["union-attr", "attr-defined", "method-assign", "return-value", "arg-type", "override"]
+
+# Per-module overrides
+[[tool.mypy.overrides]]
+module = "ai.*"
+disallow_untyped_defs = true              # AI client interface should be fully typed
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false             # Tests can be more relaxed
+
+# ── Pytest configuration ────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"                     # Automatically detect and run async tests
+qt_api = "pyqt6"                          # Tell pytest-qt to use PyQt6 (not PySide6)
+addopts = [
+    "--strict-markers",                   # Error on unregistered markers
+    "--tb=short",                         # Concise tracebacks by default
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: tests that need external services (AI backend)",
+    "gui: tests that create visible widgets",
+]
+
+# Suppress Qt debug output during tests
+filterwarnings = [
+    "ignore::DeprecationWarning:PyQt6",
+]

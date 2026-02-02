@@ -1,0 +1,164 @@
+"""
+Application settings and theme management.
+"""
+
+from dataclasses import dataclass
+
+from PyQt6.QtCore import QSettings
+
+
+@dataclass
+class EditorTheme:
+    """Theme colors for the editor."""
+
+    name: str
+    background: str
+    foreground: str
+    line_number_bg: str
+    line_number_fg: str
+    current_line: str
+    selection: str
+    # Syntax colors
+    keyword: str
+    string: str
+    comment: str
+    number: str
+    function: str
+    class_name: str
+    decorator: str
+
+
+# Built-in themes
+THEMES: dict[str, EditorTheme] = {
+    "Dark (Default)": EditorTheme(
+        name="Dark (Default)",
+        background="#1E1E1E",
+        foreground="#D4D4D4",
+        line_number_bg="#252526",
+        line_number_fg="#858585",
+        current_line="#2D2D30",
+        selection="#264F78",
+        keyword="#569CD6",
+        string="#CE9178",
+        comment="#6A9955",
+        number="#B5CEA8",
+        function="#DCDCAA",
+        class_name="#4EC9B0",
+        decorator="#C586C0",
+    ),
+    "Monokai": EditorTheme(
+        name="Monokai",
+        background="#272822",
+        foreground="#F8F8F2",
+        line_number_bg="#272822",
+        line_number_fg="#75715E",
+        current_line="#3E3D32",
+        selection="#49483E",
+        keyword="#F92672",
+        string="#E6DB74",
+        comment="#75715E",
+        number="#AE81FF",
+        function="#A6E22E",
+        class_name="#66D9EF",
+        decorator="#F92672",
+    ),
+    "Dracula": EditorTheme(
+        name="Dracula",
+        background="#282A36",
+        foreground="#F8F8F2",
+        line_number_bg="#282A36",
+        line_number_fg="#6272A4",
+        current_line="#44475A",
+        selection="#44475A",
+        keyword="#FF79C6",
+        string="#F1FA8C",
+        comment="#6272A4",
+        number="#BD93F9",
+        function="#50FA7B",
+        class_name="#8BE9FD",
+        decorator="#FF79C6",
+    ),
+    "Light": EditorTheme(
+        name="Light",
+        background="#FFFFFF",
+        foreground="#333333",
+        line_number_bg="#F5F5F5",
+        line_number_fg="#999999",
+        current_line="#FFFBDD",
+        selection="#B4D5FE",
+        keyword="#0000FF",
+        string="#A31515",
+        comment="#008000",
+        number="#098658",
+        function="#795E26",
+        class_name="#267F99",
+        decorator="#AF00DB",
+    ),
+    "Nord": EditorTheme(
+        name="Nord",
+        background="#2E3440",
+        foreground="#D8DEE9",
+        line_number_bg="#2E3440",
+        line_number_fg="#4C566A",
+        current_line="#3B4252",
+        selection="#434C5E",
+        keyword="#81A1C1",
+        string="#A3BE8C",
+        comment="#616E88",
+        number="#B48EAD",
+        function="#88C0D0",
+        class_name="#8FBCBB",
+        decorator="#B48EAD",
+    ),
+}
+
+
+class SettingsManager:
+    """Manages application settings including themes."""
+
+    def __init__(self):
+        self.settings = QSettings("MyNotion", "Editor")
+
+    def get_current_theme_name(self) -> str:
+        """Get the name of the current theme."""
+        return self.settings.value("theme", "Dark (Default)")
+
+    def set_current_theme(self, theme_name: str):
+        """Set the current theme by name."""
+        if theme_name in THEMES:
+            self.settings.setValue("theme", theme_name)
+
+    def get_current_theme(self) -> EditorTheme:
+        """Get the current theme object."""
+        theme_name = self.get_current_theme_name()
+        return THEMES.get(theme_name, THEMES["Dark (Default)"])
+
+    def get_available_themes(self) -> list[str]:
+        """Get list of available theme names."""
+        return list(THEMES.keys())
+
+    def get_font_family(self) -> str:
+        """Get the editor font family."""
+        return self.settings.value("font_family", "Consolas")
+
+    def set_font_family(self, family: str):
+        """Set the editor font family."""
+        self.settings.setValue("font_family", family)
+
+    def get_font_size(self) -> int:
+        """Get the editor font size."""
+        try:
+            size = self.settings.value("font_size", 12)
+            if size is None:
+                return 12
+            size = int(size)
+            if size <= 0 or size > 100:
+                return 12
+            return size
+        except (ValueError, TypeError):
+            return 12
+
+    def set_font_size(self, size: int):
+        """Set the editor font size."""
+        size = max(8, min(72, int(size)))
+        self.settings.setValue("font_size", size)
