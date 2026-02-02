@@ -110,6 +110,22 @@ THEMES: dict[str, EditorTheme] = {
         class_name="#8FBCBB",
         decorator="#B48EAD",
     ),
+    "Metropolis": EditorTheme(
+        name="Metropolis",
+        background="#0D1A1A",
+        foreground="#E8E4D9",
+        line_number_bg="#122424",
+        line_number_fg="#7FBFB5",
+        current_line="#1A3333",
+        selection="#2D5A5A",
+        keyword="#D4A84B",
+        string="#A8D8D0",
+        comment="#4A8080",
+        number="#E8C547",
+        function="#7FBFB5",
+        class_name="#D4A84B",
+        decorator="#C45C5C",
+    ),
 }
 
 
