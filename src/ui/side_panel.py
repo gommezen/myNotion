@@ -292,6 +292,15 @@ class SidePanel(QWidget):
         self.send_btn.clicked.connect(self._send_message)
         input_row.addWidget(self.send_btn)
 
+        # Stop button (hidden by default, shown during generation)
+        self.stop_btn = QPushButton("■")
+        self.stop_btn.setFixedSize(24, 24)
+        self.stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.stop_btn.setToolTip("Stop generating")
+        self.stop_btn.clicked.connect(self._stop_generation)
+        self.stop_btn.hide()
+        input_row.addWidget(self.stop_btn)
+
         input_layout.addWidget(input_row_widget)
         self.input_row_widget = input_row_widget  # Store for styling
         layout.addWidget(input_section)
@@ -478,9 +487,27 @@ class SidePanel(QWidget):
         self._current_ai_response = ""
         # Store current HTML so we can rebuild with streaming updates
         self._chat_html_before_response = self.chat_area.toHtml()
+        # Show stop button, hide send button
+        self.send_btn.hide()
+        self.stop_btn.show()
         # Get context based on mode (placeholder - main window will provide actual context)
         context = None
         self.ai_manager.generate(self.current_model["id"], prompt, context)
+
+    def _stop_generation(self):
+        """Stop the current AI generation."""
+        self.ai_manager.stop()
+        self._on_generation_stopped()
+        # Add indicator that generation was stopped
+        self.chat_area.append(
+            '<p style="margin: 5px 0; color: rgba(180,210,190,0.4); font-size: 10px;">'
+            "[Generation stopped]</p>"
+        )
+
+    def _on_generation_stopped(self):
+        """Handle generation stopped (either finished, error, or user stopped)."""
+        self.stop_btn.hide()
+        self.send_btn.show()
 
     def _on_ai_token(self, token: str):
         """Handle incoming token from AI."""
@@ -490,6 +517,7 @@ class SidePanel(QWidget):
 
     def _on_ai_finished(self):
         """Handle AI generation complete."""
+        self._on_generation_stopped()
         # Final update to ensure complete response is shown
         if self._current_ai_response:
             self._update_ai_response(self._current_ai_response)
@@ -503,6 +531,7 @@ class SidePanel(QWidget):
 
     def _on_ai_error(self, error: str):
         """Handle AI generation error."""
+        self._on_generation_stopped()
         self._update_ai_response(f"[Error: {error}]")
 
     def _format_response_text(self, text: str) -> str:
@@ -819,4 +848,17 @@ class SidePanel(QWidget):
             QPushButton:hover {{
                 color: {text_main};
             }}
+        """)
+
+        # Stop button (red accent for visibility)
+        self.stop_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                color: #e07070;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                color: #ff9090;
+            }
         """)

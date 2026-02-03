@@ -177,8 +177,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("MyNotion")
         self.setMinimumSize(300, 200)  # Allow small window like Notepad
 
-        # Set Moloch icon (Metropolis theme)
-        icon_path = Path(__file__).parent.parent.parent / "resources" / "moloch.ico"
+        # Set MyNotion icon (Art Deco / Metropolis theme)
+        icon_path = Path(__file__).parent.parent.parent / "resources" / "mynotion.ico"
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
 

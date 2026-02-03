@@ -23,19 +23,28 @@ class AIWorker(QObject):
         self._model = "llama3.1"
         self._prompt = ""
         self._context = None
+        self._cancelled = False
 
     def set_request(self, model: str, prompt: str, context: str | None = None):
         """Set the request parameters before starting."""
         self._model = model
         self._prompt = prompt
         self._context = context
+        self._cancelled = False
+
+    def cancel(self):
+        """Request cancellation of the current generation."""
+        self._cancelled = True
 
     def run(self):
         """Run the generation (called from thread)."""
         try:
             asyncio.run(self._async_generate())
+        except asyncio.CancelledError:
+            pass  # Expected when cancelled
         except Exception as e:
-            self.generation_error.emit(str(e))
+            if not self._cancelled:
+                self.generation_error.emit(str(e))
 
     async def _async_generate(self):
         """Async generation with streaming."""
@@ -45,10 +54,14 @@ class AIWorker(QObject):
                 prompt=self._prompt,
                 context=self._context,
             ):
+                if self._cancelled:
+                    break
                 self.token_received.emit(token)
-            self.generation_finished.emit()
+            if not self._cancelled:
+                self.generation_finished.emit()
         except Exception as e:
-            self.generation_error.emit(str(e))
+            if not self._cancelled:
+                self.generation_error.emit(str(e))
 
 
 class AIManager(QObject):
@@ -105,9 +118,17 @@ class AIManager(QObject):
 
     def stop(self):
         """Stop current generation."""
+        # Signal the worker to cancel
+        if self._worker:
+            self._worker.cancel()
+
+        # Wait for thread to finish (with timeout)
         if self._thread and self._thread.isRunning():
             self._thread.quit()
-            self._thread.wait(1000)
+            if not self._thread.wait(2000):  # 2 second timeout
+                # Force terminate if it doesn't stop gracefully
+                self._thread.terminate()
+                self._thread.wait(1000)
 
         self._cleanup()
 
