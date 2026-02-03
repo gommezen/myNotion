@@ -20,6 +20,19 @@ class OllamaClient:
         self.host = host.rstrip("/")
         self.timeout = timeout
 
+    def _parse_error(self, response: httpx.Response, model: str) -> str:
+        """Parse error message from Ollama response."""
+        try:
+            data = response.json()
+            if "error" in data:
+                return data["error"]
+        except (json.JSONDecodeError, ValueError):
+            pass
+        # Fallback to generic message
+        if response.status_code == 400:
+            return f"Model '{model}' not found. Run: ollama pull {model}"
+        return f"HTTP {response.status_code}"
+
     async def generate(
         self,
         model: str,
@@ -60,7 +73,12 @@ class OllamaClient:
                 httpx.AsyncClient(timeout=self.timeout) as client,
                 client.stream("POST", url, json=payload) as response,
             ):
-                response.raise_for_status()
+                if response.status_code != 200:
+                    # Read error body for details
+                    await response.aread()
+                    error_msg = self._parse_error(response, model)
+                    yield f"[Error: {error_msg}]"
+                    return
                 async for line in response.aiter_lines():
                     if line:
                         try:
@@ -75,8 +93,6 @@ class OllamaClient:
             yield "[Error: Cannot connect to Ollama. Is it running?]"
         except httpx.TimeoutException:
             yield "[Error: Request timed out]"
-        except httpx.HTTPStatusError as e:
-            yield f"[Error: {e.response.status_code} - {e.response.text}]"
         except Exception as e:
             logger.exception("Ollama API error")
             yield f"[Error: {e}]"
@@ -122,7 +138,12 @@ class OllamaClient:
                 httpx.AsyncClient(timeout=self.timeout) as client,
                 client.stream("POST", url, json=payload) as response,
             ):
-                response.raise_for_status()
+                if response.status_code != 200:
+                    # Read error body for details
+                    await response.aread()
+                    error_msg = self._parse_error(response, model)
+                    yield f"[Error: {error_msg}]"
+                    return
                 async for line in response.aiter_lines():
                     if line:
                         try:
@@ -137,8 +158,6 @@ class OllamaClient:
             yield "[Error: Cannot connect to Ollama. Is it running?]"
         except httpx.TimeoutException:
             yield "[Error: Request timed out]"
-        except httpx.HTTPStatusError as e:
-            yield f"[Error: {e.response.status_code} - {e.response.text}]"
         except Exception as e:
             logger.exception("Ollama chat API error")
             yield f"[Error: {e}]"
