@@ -351,13 +351,14 @@ class SidePanel(QWidget):
             }}
         """)
 
-        # Header accent
+        # Header accent (zigzag pattern)
         self.header_accent.setStyleSheet("""
             QLabel {
-                color: rgba(180,210,190,0.1);
-                font-size: 8px;
-                padding: 6px 12px 0;
-                letter-spacing: 1px;
+                color: rgba(180,210,190,0.35);
+                font-size: 14px;
+                font-weight: bold;
+                padding: 8px 12px 0;
+                letter-spacing: 0px;
                 background: transparent;
             }
         """)
