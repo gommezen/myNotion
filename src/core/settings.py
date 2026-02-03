@@ -204,3 +204,23 @@ class SettingsManager:
         """Set the editor font size."""
         size = max(8, min(72, int(size)))
         self.settings.setValue("font_size", size)
+
+    # Side panel settings
+    def get_side_panel_visible(self) -> bool:
+        """Get side panel visibility state."""
+        return self.settings.value("side_panel_visible", True, type=bool)
+
+    def set_side_panel_visible(self, visible: bool):
+        """Save side panel visibility state."""
+        self.settings.setValue("side_panel_visible", visible)
+
+    def get_side_panel_shortcuts(self) -> list[dict]:
+        """Get user-configured shortcuts."""
+        value = self.settings.value("side_panel_shortcuts")
+        if value is None:
+            return []
+        return value
+
+    def set_side_panel_shortcuts(self, shortcuts: list[dict]):
+        """Save user-configured shortcuts."""
+        self.settings.setValue("side_panel_shortcuts", shortcuts)
