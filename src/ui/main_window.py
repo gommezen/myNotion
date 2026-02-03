@@ -13,14 +13,17 @@ from PyQt6.QtGui import (
     QKeySequence,
 )
 from PyQt6.QtWidgets import (
+    QDockWidget,
     QFileDialog,
     QLabel,
     QMainWindow,
     QMessageBox,
+    QStackedWidget,
     QStatusBar,
     QTabWidget,
-    QToolBar,
     QToolButton,
+    QWidget,
+    QWidgetAction,
 )
 
 from core.recent_files import RecentFilesManager
@@ -29,6 +32,8 @@ from syntax.highlighter import Language
 from ui.custom_tab_bar import CustomTabBar
 from ui.editor_tab import EditorTab
 from ui.settings_dialog import SettingsDialog
+from ui.side_panel import CollapsedPanel, SidePanel
+from ui.toolbar_widgets import FormattingToolbar
 
 
 class MainWindow(QMainWindow):
@@ -42,6 +47,7 @@ class MainWindow(QMainWindow):
 
         self._apply_theme()
         self._setup_ui()
+        self._setup_side_panel()
         self._setup_menus()
         self._setup_toolbar()
         self._setup_statusbar()
@@ -68,12 +74,14 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(f"""
             QMainWindow {{
                 background-color: {bg};
+                font-size: 11px;
             }}
             QMenuBar {{
                 background-color: {chrome_bg};
                 color: {fg};
                 border: none;
                 padding: 2px;
+                font-size: 11px;
             }}
             QMenuBar::item {{
                 padding: 4px 8px;
@@ -87,6 +95,7 @@ class MainWindow(QMainWindow):
                 color: {fg};
                 border: 1px solid {chrome_border};
                 padding: 4px 0px;
+                font-size: 11px;
             }}
             QMenu::item {{
                 padding: 6px 30px 6px 20px;
@@ -113,7 +122,7 @@ class MainWindow(QMainWindow):
                 border-radius: 3px;
                 padding: 4px 10px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 11px;
             }}
             QToolBar QToolButton:hover {{
                 background-color: {chrome_hover};
@@ -127,6 +136,7 @@ class MainWindow(QMainWindow):
             }}
             QTabBar {{
                 background-color: {chrome_bg};
+                font-size: 11px;
             }}
             QTabBar::tab {{
                 background-color: {chrome_bg};
@@ -147,6 +157,7 @@ class MainWindow(QMainWindow):
                 background-color: {chrome_bg};
                 color: {fg};
                 border-top: 1px solid {chrome_border};
+                font-size: 11px;
             }}
             QStatusBar::item {{
                 border: none;
@@ -154,7 +165,7 @@ class MainWindow(QMainWindow):
             QStatusBar QLabel {{
                 color: {fg};
                 padding: 2px 12px;
-                font-size: 12px;
+                font-size: 11px;
             }}
             QStatusBar QLabel:hover {{
                 background-color: {chrome_hover};
@@ -254,6 +265,47 @@ class MainWindow(QMainWindow):
         if hasattr(self, "new_tab_btn"):
             QTimer.singleShot(10, self._update_new_tab_button_position)
 
+    def _setup_side_panel(self):
+        """Create the collapsible side panel with expanded/collapsed states."""
+        # Create both panel states
+        self.side_panel = SidePanel(self)
+        self.collapsed_panel = CollapsedPanel(self)
+
+        # Stack widget to switch between states
+        self.panel_stack = QStackedWidget()
+        self.panel_stack.addWidget(self.side_panel)  # Index 0: expanded
+        self.panel_stack.addWidget(self.collapsed_panel)  # Index 1: collapsed
+
+        # Dock widget
+        self.side_dock = QDockWidget(self)
+        self.side_dock.setWidget(self.panel_stack)
+        self.side_dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
+        self.side_dock.setTitleBarWidget(QWidget())  # Hide title bar
+        self.side_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea)
+
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.side_dock)
+
+        # Connect signals
+        self.side_panel.message_sent.connect(self._on_chat_message)
+        self.side_panel.settings_requested.connect(self._show_settings)
+        self.side_panel.collapse_requested.connect(self._collapse_side_panel)
+        self.collapsed_panel.expand_requested.connect(self._expand_side_panel)
+
+        # Restore state from settings
+        visible = self.settings_manager.get_side_panel_visible()
+        if visible:
+            self._expand_side_panel()
+        else:
+            self._collapse_side_panel()
+
+    def _on_chat_message(self, message: str, model_id: str, context_mode: str):
+        """Handle AI chat message - placeholder for Ollama integration."""
+        # TODO: Connect to Ollama AI client when implemented
+        # message: user's query
+        # model_id: selected model (e.g., llama3.2)
+        # context_mode: "selection", "file", or "project"
+        pass
+
     def _on_new_tab_requested(self):
         """Handle new tab request from tab bar double-click."""
         self.new_tab()
@@ -294,7 +346,7 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
 
         exit_action = QAction(self.tr("Exit"), self)
-        exit_action.setShortcut(QKeySequence.StandardKey.Quit)
+        exit_action.setShortcut(QKeySequence("Alt+F4"))
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
@@ -358,31 +410,65 @@ class MainWindow(QMainWindow):
 
         view_menu.addSeparator()
 
+        # Side panel toggle
+        self.toggle_panel_action = QAction(self.tr("AI Panel"), self)
+        self.toggle_panel_action.setCheckable(True)
+        self.toggle_panel_action.setChecked(self.panel_stack.currentIndex() == 0)
+        self.toggle_panel_action.setShortcut(QKeySequence("Ctrl+Shift+A"))
+        self.toggle_panel_action.toggled.connect(self._toggle_side_panel)
+        view_menu.addAction(self.toggle_panel_action)
+
+        view_menu.addSeparator()
+
         # Settings
         settings_action = QAction(self.tr("Settings..."), self)
         settings_action.setShortcut(QKeySequence("Ctrl+,"))
         settings_action.triggered.connect(self._show_settings)
         view_menu.addAction(settings_action)
 
+    def _collapse_side_panel(self):
+        """Collapse the side panel to thin strip."""
+        self.panel_stack.setCurrentIndex(1)  # Show collapsed panel
+        self.side_dock.setFixedWidth(36)
+        self.settings_manager.set_side_panel_visible(False)
+        if hasattr(self, "toggle_panel_action"):
+            self.toggle_panel_action.setChecked(False)
+
+    def _expand_side_panel(self):
+        """Expand the side panel to full width."""
+        self.panel_stack.setCurrentIndex(0)  # Show expanded panel
+        self.side_dock.setMinimumWidth(280)
+        self.side_dock.setMaximumWidth(350)
+        self.settings_manager.set_side_panel_visible(True)
+        if hasattr(self, "toggle_panel_action"):
+            self.toggle_panel_action.setChecked(True)
+
+    def _toggle_side_panel(self, visible: bool):
+        """Toggle side panel between expanded and collapsed."""
+        if visible:
+            self._expand_side_panel()
+        else:
+            self._collapse_side_panel()
+
     def _setup_toolbar(self):
-        """Create the formatting toolbar."""
-        toolbar = QToolBar(self.tr("Formatting"), self)
-        toolbar.setMovable(False)
-        self.addToolBar(toolbar)
+        """Create the formatting toolbar inline with menu bar."""
+        self.formatting_toolbar = FormattingToolbar(self)
 
-        # Bold
-        bold_action = QAction(self.tr("B"), self)
-        bold_action.setToolTip(self.tr("Bold"))
-        bold_action.setShortcut(QKeySequence.StandardKey.Bold)
-        bold_action.triggered.connect(self._toggle_bold)
-        toolbar.addAction(bold_action)
+        # Add as widget action to menu bar (appears after menus)
+        toolbar_action = QWidgetAction(self)
+        toolbar_action.setDefaultWidget(self.formatting_toolbar)
+        self.menuBar().addAction(toolbar_action)
 
-        # Italic
-        italic_action = QAction(self.tr("I"), self)
-        italic_action.setToolTip(self.tr("Italic"))
-        italic_action.setShortcut(QKeySequence.StandardKey.Italic)
-        italic_action.triggered.connect(self._toggle_italic)
-        toolbar.addAction(italic_action)
+        # Connect signals
+        self.formatting_toolbar.heading_selected.connect(self._insert_heading)
+        self.formatting_toolbar.list_selected.connect(self._insert_list)
+        self.formatting_toolbar.bold_clicked.connect(self._toggle_bold)
+        self.formatting_toolbar.italic_clicked.connect(self._toggle_italic)
+        self.formatting_toolbar.link_clicked.connect(self._insert_link)
+        self.formatting_toolbar.table_clicked.connect(self._insert_table)
+
+        # Apply theme
+        self.formatting_toolbar.apply_theme(self.settings_manager.get_current_theme())
 
     def _setup_statusbar(self):
         """Create the status bar with multiple indicators."""
@@ -663,9 +749,15 @@ class MainWindow(QMainWindow):
 
     def _apply_settings_to_editors(self):
         """Apply changed settings to all editor tabs and window chrome."""
+        theme = self.settings_manager.get_current_theme()
+
         # Re-apply window theme (menu bar, toolbar, tabs, status bar)
         self._apply_theme()
         self._update_new_tab_button_style()
+
+        # Apply to side panel and formatting toolbar
+        self.side_panel.apply_theme()
+        self.formatting_toolbar.apply_theme(theme)
 
         # Apply to all editor tabs
         for i in range(self.tab_widget.count()):
@@ -712,3 +804,52 @@ class MainWindow(QMainWindow):
             cursor.insertText("**")
             cursor.setPosition(pos + 1)
             editor.setTextCursor(cursor)
+
+    def _insert_heading(self, level: int):
+        """Insert markdown heading at cursor."""
+        editor = self.current_editor()
+        if not editor:
+            return
+
+        cursor = editor.textCursor()
+        cursor.movePosition(cursor.MoveOperation.StartOfBlock)
+        cursor.insertText("#" * level + " ")
+        editor.setTextCursor(cursor)
+
+    def _insert_list(self, list_type: str):
+        """Insert list marker at cursor."""
+        editor = self.current_editor()
+        if not editor:
+            return
+
+        cursor = editor.textCursor()
+        cursor.movePosition(cursor.MoveOperation.StartOfBlock)
+        marker = "- " if list_type == "bullet" else "1. "
+        cursor.insertText(marker)
+        editor.setTextCursor(cursor)
+
+    def _insert_link(self):
+        """Insert markdown link syntax."""
+        editor = self.current_editor()
+        if not editor:
+            return
+
+        cursor = editor.textCursor()
+        selected = cursor.selectedText()
+        if selected:
+            cursor.insertText(f"[{selected}](url)")
+        else:
+            pos = cursor.position()
+            cursor.insertText("[text](url)")
+            cursor.setPosition(pos + 1)
+            cursor.setPosition(pos + 5, cursor.MoveMode.KeepAnchor)
+            editor.setTextCursor(cursor)
+
+    def _insert_table(self):
+        """Insert markdown table template."""
+        editor = self.current_editor()
+        if not editor:
+            return
+
+        table = "| Header 1 | Header 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |\n"
+        editor.textCursor().insertText(table)
