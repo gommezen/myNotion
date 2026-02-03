@@ -3,6 +3,9 @@ AI Chat Panel with Metropolis Art Deco design.
 Based on ai-panel-redesign-v2_1.jsx — exact 1:1 implementation.
 """
 
+import html
+import re
+
 from PyQt6.QtCore import Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
@@ -34,7 +37,7 @@ MODELS = [
 ]
 
 # Grid slots: assigned actions + empty placeholders
-# type: "app" for shortcuts, "prompt" for AI actions, None for empty
+# "type" key: "app" for shortcuts, "prompt" for AI actions, None for empty
 INITIAL_GRID = [
     {"id": 1, "type": "app", "label": "gmail", "icon": "✉", "url": "https://mail.google.com"},
     {"id": 2, "type": "app", "label": "claude", "icon": "◈", "url": "https://claude.ai"},
@@ -45,13 +48,14 @@ INITIAL_GRID = [
 ]
 
 # AI-specific quick prompts (inline row above grid)
+# "Transfer" is a special action that inserts code from AI response into editor
 AI_PROMPTS = [
     {"label": "Explain", "prompt": "Explain this code"},
     {"label": "Docstring", "prompt": "Add docstrings"},
     {"label": "Simplify", "prompt": "Simplify this"},
     {"label": "Debug", "prompt": "Find bugs"},
     {"label": "Summarize", "prompt": "Summarize"},
-    {"label": "Refactor", "prompt": "Refactor this"},
+    {"label": "Transfer", "prompt": None, "action": "transfer"},
 ]
 
 CONTEXT_MODES = [
@@ -117,6 +121,7 @@ class SidePanel(QWidget):
     quick_action_triggered = pyqtSignal(str)  # prompt
     settings_requested = pyqtSignal()
     collapse_requested = pyqtSignal()
+    transfer_to_editor_requested = pyqtSignal(str)  # code content
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -305,9 +310,46 @@ class SidePanel(QWidget):
         self.prompts_toggle.setText(f"AI Prompts {'▾' if self.prompts_visible else '▸'}")
 
     def _on_prompt_click(self, prompt: dict):
+        # Handle special actions (e.g., Transfer)
+        if prompt.get("action") == "transfer":
+            self._transfer_to_editor()
+            return
+
         self.append_message("user", prompt["prompt"])
         self.quick_action_triggered.emit(prompt["prompt"])
         self._start_ai_generation(prompt["prompt"])
+
+    def _transfer_to_editor(self):
+        """Extract code from last AI response and emit signal to insert in editor."""
+        if not self._current_ai_response:
+            self.append_message("system", "[No AI response to transfer]")
+            return
+
+        code = self._extract_code_blocks(self._current_ai_response)
+        if code:
+            self.transfer_to_editor_requested.emit(code)
+            self.append_message("system", "[Code transferred to editor]")
+        else:
+            self.append_message("system", "[No code blocks found in response]")
+
+    def _extract_code_blocks(self, text: str) -> str:
+        """Extract raw code from markdown code blocks in AI response."""
+        # Pattern matches ```language\ncode\n``` blocks (handles \r\n and \n)
+        # Also handles optional language identifier
+        pattern = r"```\w*\r?\n(.*?)```"
+        matches = re.findall(pattern, text, re.DOTALL)
+        if matches:
+            # Join all code blocks with newlines
+            return "\n\n".join(block.strip() for block in matches)
+
+        # Fallback: try pattern with optional whitespace/newline after language
+        # This handles cases like ```python print("hi")``` (space instead of newline)
+        pattern_alt = r"```\w*[\s\r\n]+(.*?)```"
+        matches = re.findall(pattern_alt, text, re.DOTALL)
+        if matches:
+            return "\n\n".join(block.strip() for block in matches if block.strip())
+
+        return ""
 
     def _on_grid_click(self, slot: dict):
         if slot["type"] == "app" and "url" in slot:
@@ -331,8 +373,10 @@ class SidePanel(QWidget):
             marker = '<span style="color: rgba(180,210,190,0.35); font-size: 7px;">◇</span>'
             color = "rgba(180,210,190,0.6)"
 
-        html = f'<p style="margin: 5px 0; line-height: 1.5;">{marker} <span style="color: {color}; font-size: 11px;">{text}</span></p>'
-        self.chat_area.append(html)
+        # Escape HTML entities so code/HTML in responses displays as text
+        escaped_text = html.escape(text)
+        msg_html = f'<p style="margin: 5px 0; line-height: 1.5;">{marker} <span style="color: {color}; font-size: 11px;">{escaped_text}</span></p>'
+        self.chat_area.append(msg_html)
 
     def _setup_ai(self):
         """Initialize AI manager and connect signals."""
@@ -370,6 +414,45 @@ class SidePanel(QWidget):
         """Handle AI generation error."""
         self._update_ai_response(f"[Error: {error}]")
 
+    def _format_response_text(self, text: str) -> str:
+        """Format AI response with styled code blocks."""
+        # Pattern for ```language\ncode\n``` (handles \r\n and \n)
+        code_block_pattern = r"```(\w*)\r?\n(.*?)```"
+
+        def format_code_block(match: re.Match[str]) -> str:
+            language = match.group(1) or "code"
+            code = html.escape(match.group(2).strip())
+            return (
+                f'<div style="background: rgba(0,0,0,0.25); border-radius: 4px; '
+                f'padding: 8px; margin: 6px 0;">'
+                f'<span style="color: rgba(180,210,190,0.4); font-size: 9px;">'
+                f"{language}</span>"
+                f'<pre style="margin: 4px 0 0 0; white-space: pre-wrap; '
+                f"font-family: Consolas, 'SF Mono', monospace; font-size: 10px; "
+                f'color: #c8e0ce;">{code}</pre></div>'
+            )
+
+        # Split text by code blocks, process each part
+        result_parts = []
+        last_end = 0
+
+        for match in re.finditer(code_block_pattern, text, re.DOTALL):
+            # Add escaped text before this code block
+            before_text = text[last_end : match.start()]
+            if before_text:
+                result_parts.append(html.escape(before_text))
+
+            # Add formatted code block
+            result_parts.append(format_code_block(match))
+            last_end = match.end()
+
+        # Add remaining text after last code block
+        remaining = text[last_end:]
+        if remaining:
+            result_parts.append(html.escape(remaining))
+
+        return "".join(result_parts)
+
     def _update_ai_response(self, text: str):
         """Update the current AI response in the chat area."""
         # Get current HTML and replace the last AI message
@@ -379,6 +462,9 @@ class SidePanel(QWidget):
 
         # Update the last AI response
         color = "rgba(180,210,190,0.6)"
+
+        # Format response with styled code blocks
+        formatted_text = self._format_response_text(text)
 
         # Simple approach: update last paragraph
         if self.chat_area.toPlainText():
@@ -393,7 +479,7 @@ class SidePanel(QWidget):
             cursor.removeSelectedText()
             cursor.insertHtml(
                 f'<span style="color: rgba(180,210,190,0.35); font-size: 7px;">◇</span> '
-                f'<span style="color: {color}; font-size: 11px;">{text}</span>'
+                f'<span style="color: {color}; font-size: 11px;">{formatted_text}</span>'
             )
 
     def apply_theme(self):

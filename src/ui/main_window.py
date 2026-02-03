@@ -289,6 +289,7 @@ class MainWindow(QMainWindow):
         self.side_panel.message_sent.connect(self._on_chat_message)
         self.side_panel.settings_requested.connect(self._show_settings)
         self.side_panel.collapse_requested.connect(self._collapse_side_panel)
+        self.side_panel.transfer_to_editor_requested.connect(self._insert_code_to_editor)
         self.collapsed_panel.expand_requested.connect(self._expand_side_panel)
 
         # Restore state from settings
@@ -305,6 +306,14 @@ class MainWindow(QMainWindow):
         # model_id: selected model (e.g., llama3.2)
         # context_mode: "selection", "file", or "project"
         pass
+
+    def _insert_code_to_editor(self, code: str):
+        """Insert code at cursor position in current editor."""
+        editor = self.current_editor()
+        if editor:
+            cursor = editor.textCursor()
+            cursor.insertText(code)
+            editor.setTextCursor(cursor)
 
     def _on_new_tab_requested(self):
         """Handle new tab request from tab bar double-click."""
