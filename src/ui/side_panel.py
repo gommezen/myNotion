@@ -22,11 +22,14 @@ from core.settings import SettingsManager
 
 # ─── Data ───
 MODELS = [
+    {"id": "glm-4.7-flash:latest", "name": "GLM 4.7 Flash", "tag": "19GB"},
     {"id": "llama3.1", "name": "Llama 3.1", "tag": "8B"},
     {"id": "codellama", "name": "Code Llama", "tag": "7B"},
     {"id": "mistral", "name": "Mistral", "tag": "7B"},
     {"id": "gemma2", "name": "Gemma 2", "tag": "9B"},
     {"id": "deepseek-coder", "name": "DeepSeek", "tag": "6.7B"},
+    {"id": "bge-m3:latest", "name": "BGE M3", "tag": "1.2GB"},
+    {"id": "mxbai-embed-large:latest", "name": "MxBAI Embed", "tag": "Large"},
 ]
 
 # Grid slots: assigned actions + empty placeholders
