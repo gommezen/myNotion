@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ai.worker import AIManager
 from core.settings import SettingsManager
 
 # ─── Data ───
@@ -123,8 +124,10 @@ class SidePanel(QWidget):
         self.current_model = MODELS[0]
         self.context_mode = "selection"
         self.prompts_visible = True
+        self._current_ai_response = ""  # Buffer for streaming response
         self._setup_ui()
         self._apply_theme()
+        self._setup_ai()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -304,7 +307,7 @@ class SidePanel(QWidget):
     def _on_prompt_click(self, prompt: dict):
         self.append_message("user", prompt["prompt"])
         self.quick_action_triggered.emit(prompt["prompt"])
-        self.append_message("ai", f"Processing with {self.current_model['name']}...")
+        self._start_ai_generation(prompt["prompt"])
 
     def _on_grid_click(self, slot: dict):
         if slot["type"] == "app" and "url" in slot:
@@ -318,7 +321,7 @@ class SidePanel(QWidget):
             self.append_message("user", text)
             self.message_sent.emit(text, self.current_model["id"], self.context_mode)
             self.input_field.clear()
-            self.append_message("ai", f"Processing with {self.current_model['name']}...")
+            self._start_ai_generation(text)
 
     def append_message(self, role: str, text: str):
         if role == "user":
@@ -330,6 +333,68 @@ class SidePanel(QWidget):
 
         html = f'<p style="margin: 5px 0; line-height: 1.5;">{marker} <span style="color: {color}; font-size: 11px;">{text}</span></p>'
         self.chat_area.append(html)
+
+    def _setup_ai(self):
+        """Initialize AI manager and connect signals."""
+        self.ai_manager = AIManager(self)
+        self.ai_manager.token_received.connect(self._on_ai_token)
+        self.ai_manager.generation_finished.connect(self._on_ai_finished)
+        self.ai_manager.generation_error.connect(self._on_ai_error)
+
+    def _start_ai_generation(self, prompt: str):
+        """Start AI generation with the current model."""
+        self._current_ai_response = ""
+        # Add placeholder for streaming response
+        self.chat_area.append(
+            '<p id="ai-response" style="margin: 5px 0; line-height: 1.5;">'
+            '<span style="color: rgba(180,210,190,0.35); font-size: 7px;">◇</span> '
+            '<span style="color: rgba(180,210,190,0.6); font-size: 11px;"></span></p>'
+        )
+        # Get context based on mode (placeholder - main window will provide actual context)
+        context = None
+        self.ai_manager.generate(self.current_model["id"], prompt, context)
+
+    def _on_ai_token(self, token: str):
+        """Handle incoming token from AI."""
+        self._current_ai_response += token
+        # Update the last message with accumulated response
+        self._update_ai_response(self._current_ai_response)
+
+    def _on_ai_finished(self):
+        """Handle AI generation complete."""
+        # Final update to ensure complete response is shown
+        if self._current_ai_response:
+            self._update_ai_response(self._current_ai_response)
+
+    def _on_ai_error(self, error: str):
+        """Handle AI generation error."""
+        self._update_ai_response(f"[Error: {error}]")
+
+    def _update_ai_response(self, text: str):
+        """Update the current AI response in the chat area."""
+        # Get current HTML and replace the last AI message
+        cursor = self.chat_area.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        self.chat_area.setTextCursor(cursor)
+
+        # Update the last AI response
+        color = "rgba(180,210,190,0.6)"
+
+        # Simple approach: update last paragraph
+        if self.chat_area.toPlainText():
+            # Just scroll to bottom - the streaming will be visible
+            self.chat_area.verticalScrollBar().setValue(
+                self.chat_area.verticalScrollBar().maximum()
+            )
+            # For simplicity, just append the current state
+            # In production, we'd update the last message in place
+            cursor.movePosition(cursor.MoveOperation.End)
+            cursor.movePosition(cursor.MoveOperation.StartOfBlock, cursor.MoveMode.KeepAnchor)
+            cursor.removeSelectedText()
+            cursor.insertHtml(
+                f'<span style="color: rgba(180,210,190,0.35); font-size: 7px;">◇</span> '
+                f'<span style="color: {color}; font-size: 11px;">{text}</span>'
+            )
 
     def apply_theme(self):
         """Public method for external theme updates."""
@@ -565,4 +630,3 @@ class SidePanel(QWidget):
                 color: {text_main};
             }}
         """)
-
