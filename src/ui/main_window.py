@@ -177,8 +177,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("MyNotion")
         self.setMinimumSize(300, 200)  # Allow small window like Notepad
 
-        # Set Moloch icon (Metropolis theme)
-        icon_path = Path(__file__).parent.parent.parent / "resources" / "moloch.ico"
+        # Set MyNotion icon (Art Deco / Metropolis theme)
+        icon_path = Path(__file__).parent.parent.parent / "resources" / "mynotion.ico"
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
 
@@ -289,6 +289,8 @@ class MainWindow(QMainWindow):
         self.side_panel.message_sent.connect(self._on_chat_message)
         self.side_panel.settings_requested.connect(self._show_settings)
         self.side_panel.collapse_requested.connect(self._collapse_side_panel)
+        self.side_panel.transfer_to_editor_requested.connect(self._insert_code_to_editor)
+        self.side_panel.new_tab_with_code_requested.connect(self._new_tab_with_code)
         self.collapsed_panel.expand_requested.connect(self._expand_side_panel)
 
         # Restore state from settings
@@ -305,6 +307,39 @@ class MainWindow(QMainWindow):
         # model_id: selected model (e.g., llama3.2)
         # context_mode: "selection", "file", or "project"
         pass
+
+    def _insert_code_to_editor(self, code: str):
+        """Insert code at cursor position in current editor."""
+        editor = self.current_editor()
+        if editor:
+            cursor = editor.textCursor()
+            cursor.insertText(code)
+            editor.setTextCursor(cursor)
+
+    def _new_tab_with_code(self, code: str, language: str):
+        """Create a new tab with the given code content."""
+        editor = self.new_tab()
+        editor.setPlainText(code)
+
+        # Try to set language based on the code block language
+        language_map = {
+            "python": Language.PYTHON,
+            "py": Language.PYTHON,
+            "javascript": Language.JAVASCRIPT,
+            "js": Language.JAVASCRIPT,
+            "html": Language.HTML,
+            "css": Language.CSS,
+            "json": Language.JSON,
+            "markdown": Language.MARKDOWN,
+            "md": Language.MARKDOWN,
+        }
+        if language.lower() in language_map:
+            lang = language_map[language.lower()]
+            editor.set_language(lang)
+            self._update_language_indicator(lang)
+
+        # Update tab title
+        self.tab_widget.setTabText(self.tab_widget.currentIndex(), f"AI: {language or 'code'}")
 
     def _on_new_tab_requested(self):
         """Handle new tab request from tab bar double-click."""
@@ -437,8 +472,8 @@ class MainWindow(QMainWindow):
     def _expand_side_panel(self):
         """Expand the side panel to full width."""
         self.panel_stack.setCurrentIndex(0)  # Show expanded panel
-        self.side_dock.setMinimumWidth(280)
-        self.side_dock.setMaximumWidth(350)
+        self.side_dock.setMinimumWidth(320)
+        self.side_dock.setMaximumWidth(500)
         self.settings_manager.set_side_panel_visible(True)
         if hasattr(self, "toggle_panel_action"):
             self.toggle_panel_action.setChecked(True)
