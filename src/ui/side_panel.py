@@ -283,11 +283,6 @@ class SidePanel(QWidget):
         self.input_row_widget = input_row_widget  # Store for styling
         layout.addWidget(input_section)
 
-        # ─── Footer accent ───
-        self.footer_accent = QLabel("─ · ─ · ─ · ─ · ─ · ─ · ─ · ─ · ─")
-        self.footer_accent.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.footer_accent)
-
     def _update_model_button(self):
         m = self.current_model
         self.model_btn.setText(f"{m['name']} {m['tag']} ▾")
@@ -570,13 +565,3 @@ class SidePanel(QWidget):
             }}
         """)
 
-        # Footer accent
-        self.footer_accent.setStyleSheet("""
-            QLabel {
-                color: rgba(180,210,190,0.12);
-                font-size: 8px;
-                padding: 0 16px 8px;
-                letter-spacing: 2px;
-                background: transparent;
-            }
-        """)
