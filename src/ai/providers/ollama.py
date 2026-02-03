@@ -12,6 +12,13 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_HOST = "http://localhost:11434"
 
+# System prompt to encourage detailed, well-formatted responses
+DEFAULT_SYSTEM_PROMPT = """You are a helpful coding assistant. When providing code:
+1. Always wrap code in markdown code blocks with the language specified (e.g., ```python)
+2. Provide clear explanations before and after code examples
+3. Include comments in the code to explain key parts
+4. Give complete, working examples rather than snippets"""
+
 
 class OllamaClient:
     """Async client for Ollama API."""
@@ -63,10 +70,8 @@ class OllamaClient:
             "model": model,
             "prompt": full_prompt,
             "stream": True,
+            "system": system or DEFAULT_SYSTEM_PROMPT,
         }
-
-        if system:
-            payload["system"] = system
 
         try:
             async with (

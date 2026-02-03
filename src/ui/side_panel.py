@@ -9,6 +9,7 @@ import re
 from PyQt6.QtCore import Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
+    QApplication,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -48,13 +49,13 @@ INITIAL_GRID = [
 ]
 
 # AI-specific quick prompts (inline row above grid)
-# "Transfer" is a special action that inserts code from AI response into editor
+# "Transfer" and "Examples" are special actions
 AI_PROMPTS = [
     {"label": "Explain", "prompt": "Explain this code"},
     {"label": "Docstring", "prompt": "Add docstrings"},
     {"label": "Simplify", "prompt": "Simplify this"},
     {"label": "Debug", "prompt": "Find bugs"},
-    {"label": "Summarize", "prompt": "Summarize"},
+    {"label": "Examples", "prompt": None, "action": "examples"},
     {"label": "Transfer", "prompt": None, "action": "transfer"},
 ]
 
@@ -122,6 +123,7 @@ class SidePanel(QWidget):
     settings_requested = pyqtSignal()
     collapse_requested = pyqtSignal()
     transfer_to_editor_requested = pyqtSignal(str)  # code content
+    new_tab_with_code_requested = pyqtSignal(str, str)  # code content, language
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -130,6 +132,8 @@ class SidePanel(QWidget):
         self.context_mode = "selection"
         self.prompts_visible = True
         self._current_ai_response = ""  # Buffer for streaming response
+        self._chat_html_before_response = ""  # HTML state before AI response
+        self._code_blocks: list[tuple[str, str]] = []  # [(code, language), ...]
         self._setup_ui()
         self._apply_theme()
         self._setup_ai()
@@ -175,7 +179,8 @@ class SidePanel(QWidget):
 
         # ─── Chat area ───
         self.chat_area = QTextBrowser()
-        self.chat_area.setOpenExternalLinks(True)
+        self.chat_area.setOpenExternalLinks(False)  # Handle links ourselves
+        self.chat_area.anchorClicked.connect(self._on_anchor_clicked)
         self.chat_area.setPlaceholderText("Start a conversation...")
         layout.addWidget(self.chat_area, stretch=1)
 
@@ -310,14 +315,42 @@ class SidePanel(QWidget):
         self.prompts_toggle.setText(f"AI Prompts {'▾' if self.prompts_visible else '▸'}")
 
     def _on_prompt_click(self, prompt: dict):
-        # Handle special actions (e.g., Transfer)
-        if prompt.get("action") == "transfer":
+        # Handle special actions (e.g., Transfer, Examples)
+        action = prompt.get("action")
+        if action == "transfer":
             self._transfer_to_editor()
+            return
+        if action == "examples":
+            self._generate_more_examples()
             return
 
         self.append_message("user", prompt["prompt"])
         self.quick_action_triggered.emit(prompt["prompt"])
         self._start_ai_generation(prompt["prompt"])
+
+    def _generate_more_examples(self):
+        """Generate more examples based on code in the last AI response."""
+        if not self._current_ai_response:
+            self.append_message("system", "[No AI response to generate examples from]")
+            return
+
+        code = self._extract_code_blocks(self._current_ai_response)
+        if code:
+            prompt = (
+                f"Here is some code:\n\n```\n{code}\n```\n\n"
+                f"Please give me 2-3 more examples or variations of this code. "
+                f"Show different approaches or use cases."
+            )
+            self.append_message("user", "[More examples...]")
+            self._start_ai_generation(prompt)
+        else:
+            # No code blocks, use the full response
+            prompt = (
+                f"Based on this:\n\n{self._current_ai_response}\n\n"
+                f"Please give me more examples or variations."
+            )
+            self.append_message("user", "[More examples...]")
+            self._start_ai_generation(prompt)
 
     def _transfer_to_editor(self):
         """Extract code from last AI response and emit signal to insert in editor."""
@@ -350,6 +383,61 @@ class SidePanel(QWidget):
             return "\n\n".join(block.strip() for block in matches if block.strip())
 
         return ""
+
+    def _on_anchor_clicked(self, url: QUrl):
+        """Handle clicks on links in the chat area."""
+        url_str = url.toString()
+
+        # Handle code block actions (code:action:index format)
+        if url_str.startswith("code:"):
+            parts = url_str.split(":")
+            if len(parts) >= 3:
+                action = parts[1]
+                try:
+                    index = int(parts[2])
+                    if 0 <= index < len(self._code_blocks):
+                        code, language = self._code_blocks[index]
+                        self._handle_code_action(action, code, language)
+                except (ValueError, IndexError):
+                    pass
+            return
+
+        # Handle action links (action:name format)
+        if url_str.startswith("action:"):
+            action = url_str.split(":")[1]
+            if action == "continue":
+                self._continue_generation()
+            return
+
+        # Handle external URLs (http/https)
+        if url_str.startswith(("http://", "https://")):
+            QDesktopServices.openUrl(url)
+
+    def _handle_code_action(self, action: str, code: str, language: str):
+        """Handle code block action (copy, insert, newtab)."""
+        if action == "copy":
+            clipboard = QApplication.clipboard()
+            if clipboard:
+                clipboard.setText(code)
+                self.append_message("system", "[Code copied to clipboard]")
+        elif action == "insert":
+            self.transfer_to_editor_requested.emit(code)
+            self.append_message("system", "[Code inserted at cursor]")
+        elif action == "newtab":
+            self.new_tab_with_code_requested.emit(code, language)
+            self.append_message("system", "[Code opened in new tab]")
+
+    def _continue_generation(self):
+        """Continue generating from the last AI response."""
+        if self._current_ai_response:
+            # Include previous response as context so AI knows what to continue
+            prompt = (
+                f"Here is what you wrote previously:\n\n"
+                f"{self._current_ai_response}\n\n"
+                f"Please continue from where you left off. Add more content, examples, or details."
+            )
+            self.append_message("user", "[Continue...]")
+            self._start_ai_generation(prompt)
 
     def _on_grid_click(self, slot: dict):
         if slot["type"] == "app" and "url" in slot:
@@ -388,12 +476,8 @@ class SidePanel(QWidget):
     def _start_ai_generation(self, prompt: str):
         """Start AI generation with the current model."""
         self._current_ai_response = ""
-        # Add placeholder for streaming response
-        self.chat_area.append(
-            '<p id="ai-response" style="margin: 5px 0; line-height: 1.5;">'
-            '<span style="color: rgba(180,210,190,0.35); font-size: 7px;">◇</span> '
-            '<span style="color: rgba(180,210,190,0.6); font-size: 11px;"></span></p>'
-        )
+        # Store current HTML so we can rebuild with streaming updates
+        self._chat_html_before_response = self.chat_area.toHtml()
         # Get context based on mode (placeholder - main window will provide actual context)
         context = None
         self.ai_manager.generate(self.current_model["id"], prompt, context)
@@ -409,41 +493,68 @@ class SidePanel(QWidget):
         # Final update to ensure complete response is shown
         if self._current_ai_response:
             self._update_ai_response(self._current_ai_response)
+            # Add "Continue" link after response
+            continue_html = (
+                '<p style="margin: 8px 0 5px 0;">'
+                '<a href="action:continue" style="color: #7fbf8f; text-decoration: none; '
+                'font-size: 11px;">▶ Continue generating...</a></p>'
+            )
+            self.chat_area.append(continue_html)
 
     def _on_ai_error(self, error: str):
         """Handle AI generation error."""
         self._update_ai_response(f"[Error: {error}]")
 
     def _format_response_text(self, text: str) -> str:
-        """Format AI response with styled code blocks."""
+        """Format AI response with styled code blocks and action buttons."""
+        # Clear previous code blocks
+        self._code_blocks = []
+
         # Pattern for ```language\ncode\n``` (handles \r\n and \n)
         code_block_pattern = r"```(\w*)\r?\n(.*?)```"
 
-        def format_code_block(match: re.Match[str]) -> str:
+        # Link style for action buttons (QTextBrowser compatible)
+        link_style = "color: #7fbf8f; text-decoration: none;"
+
+        def format_code_block(match: re.Match[str], index: int) -> str:
             language = match.group(1) or "code"
-            code = html.escape(match.group(2).strip())
+            raw_code = match.group(2).strip()
+            escaped_code = html.escape(raw_code)
+
+            # Store raw code for later retrieval
+            self._code_blocks.append((raw_code, language))
+
+            # Action links with pipe separators (QTextBrowser doesn't support margin)
+            actions_html = (
+                f'<a href="code:copy:{index}" style="{link_style}">Copy</a>'
+                f"&nbsp;&nbsp;|&nbsp;&nbsp;"
+                f'<a href="code:insert:{index}" style="{link_style}">Insert</a>'
+                f"&nbsp;&nbsp;|&nbsp;&nbsp;"
+                f'<a href="code:newtab:{index}" style="{link_style}">New Tab</a>'
+            )
+
             return (
-                f'<div style="background: rgba(0,0,0,0.25); border-radius: 4px; '
-                f'padding: 8px; margin: 6px 0;">'
-                f'<span style="color: rgba(180,210,190,0.4); font-size: 9px;">'
-                f"{language}</span>"
-                f'<pre style="margin: 4px 0 0 0; white-space: pre-wrap; '
-                f"font-family: Consolas, 'SF Mono', monospace; font-size: 10px; "
-                f'color: #c8e0ce;">{code}</pre></div>'
+                f'<div style="background: rgba(0,0,0,0.3); border-radius: 4px; '
+                f'padding: 10px; margin: 8px 0;">'
+                f'<p style="margin: 0 0 6px 0; color: rgba(180,210,190,0.5); '
+                f'font-size: 10px;">{language} &nbsp;&nbsp;—&nbsp;&nbsp; {actions_html}</p>'
+                f'<pre style="margin: 0; white-space: pre-wrap; '
+                f"font-family: Consolas, 'SF Mono', monospace; font-size: 12px; "
+                f'color: #c8e0ce; line-height: 1.4;">{escaped_code}</pre></div>'
             )
 
         # Split text by code blocks, process each part
         result_parts = []
         last_end = 0
 
-        for match in re.finditer(code_block_pattern, text, re.DOTALL):
+        for block_index, match in enumerate(re.finditer(code_block_pattern, text, re.DOTALL)):
             # Add escaped text before this code block
             before_text = text[last_end : match.start()]
             if before_text:
                 result_parts.append(html.escape(before_text))
 
-            # Add formatted code block
-            result_parts.append(format_code_block(match))
+            # Add formatted code block with actions
+            result_parts.append(format_code_block(match, block_index))
             last_end = match.end()
 
         # Add remaining text after last code block
@@ -455,32 +566,25 @@ class SidePanel(QWidget):
 
     def _update_ai_response(self, text: str):
         """Update the current AI response in the chat area."""
-        # Get current HTML and replace the last AI message
-        cursor = self.chat_area.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        self.chat_area.setTextCursor(cursor)
-
-        # Update the last AI response
         color = "rgba(180,210,190,0.6)"
 
         # Format response with styled code blocks
         formatted_text = self._format_response_text(text)
 
-        # Simple approach: update last paragraph
-        if self.chat_area.toPlainText():
-            # Just scroll to bottom - the streaming will be visible
-            self.chat_area.verticalScrollBar().setValue(
-                self.chat_area.verticalScrollBar().maximum()
-            )
-            # For simplicity, just append the current state
-            # In production, we'd update the last message in place
-            cursor.movePosition(cursor.MoveOperation.End)
-            cursor.movePosition(cursor.MoveOperation.StartOfBlock, cursor.MoveMode.KeepAnchor)
-            cursor.removeSelectedText()
-            cursor.insertHtml(
-                f'<span style="color: rgba(180,210,190,0.35); font-size: 7px;">◇</span> '
-                f'<span style="color: {color}; font-size: 11px;">{formatted_text}</span>'
-            )
+        # Build the AI response HTML
+        ai_response_html = (
+            f'<p style="margin: 5px 0; line-height: 1.5;">'
+            f'<span style="color: rgba(180,210,190,0.35); font-size: 7px;">◇</span> '
+            f'<span style="color: {color}; font-size: 11px;">{formatted_text}</span></p>'
+        )
+
+        # Restore saved HTML and append the current AI response
+        if hasattr(self, "_chat_html_before_response"):
+            self.chat_area.setHtml(self._chat_html_before_response)
+            self.chat_area.append(ai_response_html)
+
+        # Scroll to bottom
+        self.chat_area.verticalScrollBar().setValue(self.chat_area.verticalScrollBar().maximum())
 
     def apply_theme(self):
         """Public method for external theme updates."""
