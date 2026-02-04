@@ -6,7 +6,7 @@ Based on ai-panel-redesign-v2_1.jsx — exact 1:1 implementation.
 import html
 import re
 
-from PyQt6.QtCore import Qt, QUrl, pyqtSignal
+from PyQt6.QtCore import QEvent, Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QApplication,
@@ -128,55 +128,6 @@ CONTEXT_MODES = [
 ]
 
 
-class CollapsedPanel(QWidget):
-    """Collapsed state: thin vertical strip with door button only."""
-
-    expand_requested = pyqtSignal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setFixedWidth(36)
-        self._setup_ui()
-
-    def _setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 8, 0, 0)
-        layout.setSpacing(0)
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
-
-        # Door button (open direction) - only element
-        self.door_btn = QToolButton()
-        self.door_btn.setText("◨")
-        self.door_btn.setToolTip("Open AI panel")
-        self.door_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.door_btn.clicked.connect(self.expand_requested.emit)
-        layout.addWidget(self.door_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        layout.addStretch()
-
-        self._apply_style()
-
-    def _apply_style(self):
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #1a2a2a;
-            }
-        """)
-
-        self.door_btn.setStyleSheet("""
-            QToolButton {
-                background: transparent;
-                border: none;
-                color: rgba(180,210,190,0.45);
-                font-size: 22px;
-                padding: 6px;
-            }
-            QToolButton:hover {
-                color: #b4d2be;
-            }
-        """)
-
-
 class SidePanel(QWidget):
     """AI Chat Panel with Metropolis Art Deco aesthetic."""
 
@@ -208,24 +159,6 @@ class SidePanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # ─── Header: door icon only ───
-        header = QWidget()
-        header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(16, 10, 16, 6)
-        header_layout.setSpacing(2)
-
-        header_layout.addStretch()
-
-        # Door button (close direction)
-        self.door_btn = QToolButton()
-        self.door_btn.setText("◧")  # Door icon pointing right
-        self.door_btn.setToolTip("Close panel")
-        self.door_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.door_btn.clicked.connect(self.collapse_requested.emit)
-        header_layout.addWidget(self.door_btn)
-
-        layout.addWidget(header)
-
         # Keep context_buttons as empty list for compatibility
         self.context_buttons: list[QPushButton] = []
 
@@ -248,25 +181,23 @@ class SidePanel(QWidget):
         self.prompts_toggle.clicked.connect(self._toggle_prompts)
         prompts_layout.addWidget(self.prompts_toggle, alignment=Qt.AlignmentFlag.AlignLeft)
 
-        # Prompts grid (collapsible) - 3 columns to fit in panel
-        # Prompts grid (2 columns, card style with icons)
+        # Prompts grid (3 columns, flat text chips)
         self.prompts_container = QWidget()
         prompts_grid = QGridLayout(self.prompts_container)
-        prompts_grid.setContentsMargins(0, 6, 0, 0)
-        prompts_grid.setSpacing(6)
+        prompts_grid.setContentsMargins(0, 4, 0, 0)
+        prompts_grid.setSpacing(2)
 
         self.prompt_buttons: list[QPushButton] = []
         for i, prompt in enumerate(AI_PROMPTS):
-            # Card button with icon above label
+            # Flat text chip: icon + label inline
             icon = prompt.get("icon", "")
             label = prompt["label"]
-            btn = QPushButton(f"{icon}\n{label}")
+            btn = QPushButton(f"{icon} {label}")
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setToolTip(prompt.get("tip", ""))
-            btn.setFixedHeight(72)
             btn.clicked.connect(lambda checked, p=prompt: self._on_prompt_click(p))
             self.prompt_buttons.append(btn)
-            row, col = i // 2, i % 2  # 2 columns
+            row, col = i // 3, i % 3  # 3 columns
             prompts_grid.addWidget(btn, row, col)
 
         prompts_layout.addWidget(self.prompts_container)
@@ -305,6 +236,8 @@ class SidePanel(QWidget):
         self.input_field = QLineEdit()
         self.input_field.setPlaceholderText("Ask anything...")
         self.input_field.returnPressed.connect(self._send_message)
+        # Track focus for gold border effect
+        self.input_field.installEventFilter(self)
         input_row.addWidget(self.input_field)
 
         self.send_btn = QPushButton("▶")
@@ -329,6 +262,34 @@ class SidePanel(QWidget):
     def _update_model_button(self):
         m = self.current_model
         self.model_btn.setText(f"{m['name']} {m['tag']} ▾")
+
+    def eventFilter(self, obj, event):
+        """Handle focus events on the input field to show gold border."""
+        if obj == self.input_field:
+            if event.type() == QEvent.Type.FocusIn:
+                self._set_input_focus_border(True)
+            elif event.type() == QEvent.Type.FocusOut:
+                self._set_input_focus_border(False)
+        return super().eventFilter(obj, event)
+
+    def _set_input_focus_border(self, focused: bool):
+        """Update input row border based on focus state."""
+        if focused:
+            self.input_row_widget.setStyleSheet("""
+                QWidget {
+                    background: rgba(180,210,190,0.04);
+                    border: 1px solid #d4a84b;
+                    border-radius: 3px;
+                }
+            """)
+        else:
+            self.input_row_widget.setStyleSheet("""
+                QWidget {
+                    background: rgba(180,210,190,0.04);
+                    border: 1px solid transparent;
+                    border-radius: 3px;
+                }
+            """)
 
     def _set_model(self, model: dict):
         self.current_model = model
@@ -692,8 +653,7 @@ class SidePanel(QWidget):
     def _apply_theme(self):
         """Apply Metropolis Art Deco theme."""
         bg = "#1a2a2a"
-        text_main = "#b4d2be"
-        text_dim = "rgba(180,210,190,0.45)"
+        text_main = "#8aa898"
         accent = "#7fbf8f"
 
         self.setStyleSheet(f"""
@@ -701,20 +661,6 @@ class SidePanel(QWidget):
                 background-color: {bg};
                 color: {text_main};
                 font-family: 'Consolas', 'SF Mono', monospace;
-            }}
-        """)
-
-        # Door button (larger)
-        self.door_btn.setStyleSheet(f"""
-            QToolButton {{
-                background: transparent;
-                border: none;
-                color: {text_dim};
-                font-size: 22px;
-                padding: 4px;
-            }}
-            QToolButton:hover {{
-                color: {text_main};
             }}
         """)
 
@@ -747,22 +693,19 @@ class SidePanel(QWidget):
             }}
         """)
 
-        # Prompt cards (icon + label)
+        # Prompt chips (flat text, no borders)
         for btn in self.prompt_buttons:
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background: transparent;
-                    border: 1px solid rgba(127, 191, 181, 0.2);
-                    border-radius: 4px;
-                    color: #7fbfb5;
-                    font-size: 12px;
-                    padding: 10px 4px;
-                    line-height: 1.4;
+                    border: none;
+                    color: rgba(127, 191, 181, 0.6);
+                    font-size: 11px;
+                    padding: 6px 4px;
+                    text-align: left;
                 }}
                 QPushButton:hover {{
                     color: {text_main};
-                    border-color: rgba(127, 191, 181, 0.4);
-                    background: rgba(127, 191, 181, 0.05);
                 }}
             """)
 
@@ -809,10 +752,11 @@ class SidePanel(QWidget):
         if self.model_btn.menu():
             self.model_btn.menu().setStyleSheet(menu_style)
 
-        # Input row background
+        # Input row background (transparent border reserves space for focus border)
         self.input_row_widget.setStyleSheet("""
             QWidget {
                 background: rgba(180,210,190,0.04);
+                border: 1px solid transparent;
                 border-radius: 3px;
             }
         """)

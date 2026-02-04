@@ -159,6 +159,26 @@ class EditorTab(QPlainTextEdit):
         painter = QPainter(self.line_number_area)
         painter.fillRect(event.rect(), QColor(self._theme.line_number_bg))
 
+        # Line color for separators
+        line_color = QColor("#2a4a4a")
+
+        # Draw line on LEFT edge - separates panel from line numbers
+        painter.setPen(line_color)
+        painter.drawLine(
+            0,
+            event.rect().top(),
+            0,
+            event.rect().bottom(),
+        )
+
+        # Draw line on RIGHT edge - separates line numbers from code
+        painter.drawLine(
+            self.line_number_area.width() - 1,
+            event.rect().top(),
+            self.line_number_area.width() - 1,
+            event.rect().bottom(),
+        )
+
         block = self.firstVisibleBlock()
         block_number = block.blockNumber()
         top = int(self.blockBoundingGeometry(block).translated(self.contentOffset()).top())
@@ -171,7 +191,7 @@ class EditorTab(QPlainTextEdit):
                 painter.drawText(
                     0,
                     top,
-                    self.line_number_area.width() - 5,
+                    self.line_number_area.width() - 8,
                     self.fontMetrics().height(),
                     Qt.AlignmentFlag.AlignRight,
                     number,

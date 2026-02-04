@@ -91,6 +91,19 @@ require ruff
 require mypy
 require pytest
 
+# --- Stage 0: Import Validation (catches runtime import errors) --------------
+stage "Import Validation"
+
+cd "${SRC_DIR}"
+if python -c "from ui.main_window import MainWindow" 2>/dev/null; then
+    pass "All imports valid"
+else
+    fail "Import errors detected — fix before continuing"
+    echo -e "${RED}  Run: cd src && python -c 'from ui.main_window import MainWindow'${RESET}"
+    exit 1
+fi
+cd "${PROJECT_ROOT}"
+
 # --- Stage 1: Formatting -----------------------------------------------------
 stage "Formatting (ruff format)"
 

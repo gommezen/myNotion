@@ -46,6 +46,17 @@ where ruff >nul 2>&1 || (echo ERROR: ruff not found. Run: pip install -r require
 where mypy >nul 2>&1 || (echo ERROR: mypy not found. Run: pip install -r requirements-dev.txt & exit /b 1)
 where pytest >nul 2>&1 || (echo ERROR: pytest not found. Run: pip install -r requirements-dev.txt & exit /b 1)
 
+REM Stage 0: Import validation (catches runtime import errors)
+echo.
+echo === Stage 0: Import Validation ===
+cd /d "%PROJECT_ROOT%\src"
+python -c "from ui.main_window import MainWindow; print('  [OK] All imports valid')"
+if !errorlevel! neq 0 (
+    echo   [FAIL] Import errors - fix before continuing
+    exit /b 1
+)
+cd /d "%PROJECT_ROOT%"
+
 REM Stage 1: Formatting
 echo.
 echo === Stage 1: Formatting (ruff format) ===

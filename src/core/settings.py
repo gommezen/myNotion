@@ -134,11 +134,11 @@ THEMES: dict[str, EditorTheme] = {
     ),
     "Metropolis": EditorTheme(
         name="Metropolis",
-        background="#0D1A1A",  # 0D1A1Aeditor bg, active tab
+        background="#1a2a2a",  # editor bg, active tab (MUST match)
         foreground="#E8E4D9",  # main text color
-        line_number_bg="#122424",  # 122424 line number gutter bg
+        line_number_bg="#1a2a2a",  # line number gutter bg (same as editor/active tab)
         line_number_fg="#4a6a6a",  # line number text (dimmer)
-        current_line="#1A3333",  # 1A3333 current line highlight
+        current_line="#1A3333",  # current line highlight
         selection="#122424",  # text selection
         keyword="#D4A84B",  # keywords (if, for, def)
         string="#A8D8D0",  # string literals
@@ -147,9 +147,9 @@ THEMES: dict[str, EditorTheme] = {
         function="#7FBFB5",  # function names
         class_name="#D4A84B",  # class names
         decorator="#C45C5C",  # decorators (@)
-        chrome_bg="#122424",  # 122424 menu bar, toolbar bg
-        chrome_hover="#0D1A1A",  # inactive tabs
-        chrome_border="#1A3333",  # tab hover, borders
+        chrome_bg="#121f1f",  # tab bar, status bar bg
+        chrome_hover="#10191b",  # tab hover
+        chrome_border="#1A3333",  # borders
     ),
 }
 

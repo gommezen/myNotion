@@ -3,7 +3,6 @@
 # =============================================================================
 
 
-
 class TestEditorTab:
     """Tests for the EditorTab widget."""
 

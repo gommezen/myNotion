@@ -1,4 +1,4 @@
-# Python
+D# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -59,15 +59,9 @@ pip-delete-this-directory.txt
 # OS
 .DS_Store
 Thumbs.db
-nul
++nul
 
 # Claude Code
 CLAUDE.md
 .claude/
 
-# Ruff cache
-.ruff_cache/
-
-# Local dev notes
-*.local.md
-notes/

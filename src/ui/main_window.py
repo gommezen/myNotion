@@ -36,10 +36,12 @@ from PyQt6.QtWidgets import (
 from core.recent_files import RecentFilesManager
 from core.settings import SettingsManager
 from syntax.highlighter import Language
+from ui.activity_bar import ActivityBar
 from ui.custom_tab_bar import CustomTabBar
 from ui.editor_tab import EditorTab
+from ui.file_browser import FileBrowserPanel
 from ui.settings_dialog import SettingsDialog
-from ui.side_panel import CollapsedPanel, SidePanel
+from ui.side_panel import SidePanel
 from ui.toolbar_widgets import FormattingToolbar
 
 
@@ -147,24 +149,25 @@ class MainWindow(QMainWindow):
             }}
             QTabBar::tab {{
                 background-color: #121f1f;
-                color: rgba(180, 210, 190, 0.35);
-                padding: 6px 12px 6px 10px;
+                color: rgba(180, 210, 190, 0.5);
+                padding: 8px 12px 8px 10px;
                 border: none;
+                border-top: 2px solid transparent;
                 min-width: 80px;
-                margin-right: 1px;
+                margin-right: 0px;
             }}
             QTabBar::tab:selected {{
-                background-color: {bg};
+                background-color: #1a2a2a;
                 color: #c8e0ce;
                 border-top: 2px solid #d4a84b;
             }}
             QTabBar::tab:hover:!selected {{
                 background-color: #1a2a2a;
-                color: rgba(180, 210, 190, 0.6);
+                color: rgba(180, 210, 190, 0.7);
             }}
             QStatusBar {{
                 background-color: {chrome_bg};
-                color: {fg};
+                color: rgba(180, 210, 190, 0.6);
                 border-top: 1px solid {chrome_border};
                 font-size: 11px;
             }}
@@ -172,11 +175,12 @@ class MainWindow(QMainWindow):
                 border: none;
             }}
             QStatusBar QLabel {{
-                color: {fg};
+                color: rgba(180, 210, 190, 0.6);
                 padding: 2px 12px;
                 font-size: 10px;
             }}
             QStatusBar QLabel:hover {{
+                color: #c8e0ce;
                 background-color: {chrome_hover};
             }}
         """)
@@ -275,26 +279,42 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(10, self._update_new_tab_button_position)
 
     def _setup_side_panel(self):
-        """Create the collapsible side panel with expanded/collapsed states."""
-        # Create both panel states
-        self.side_panel = SidePanel(self)
-        self.collapsed_panel = CollapsedPanel(self)
+        """Create the side panel with activity bar and content panels."""
+        from PyQt6.QtWidgets import QHBoxLayout
 
-        # Stack widget to switch between states
-        self.panel_stack = QStackedWidget()
-        self.panel_stack.addWidget(self.side_panel)  # Index 0: expanded
-        self.panel_stack.addWidget(self.collapsed_panel)  # Index 1: collapsed
+        # Activity bar (always visible on left edge)
+        self.activity_bar = ActivityBar(self)
+
+        # Content panels
+        self.side_panel = SidePanel(self)
+        self.file_browser = FileBrowserPanel(self)
+
+        # Stack for content (switches between AI and Files)
+        self.panel_content = QStackedWidget()
+        self.panel_content.addWidget(self.side_panel)  # Index 0: AI panel
+        self.panel_content.addWidget(self.file_browser)  # Index 1: File browser
+
+        # Container with horizontal layout: [ActivityBar | ContentStack]
+        panel_container = QWidget()
+        container_layout = QHBoxLayout(panel_container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
+        container_layout.addWidget(self.activity_bar)
+        container_layout.addWidget(self.panel_content)
 
         # Dock widget
         self.side_dock = QDockWidget(self)
-        self.side_dock.setWidget(self.panel_stack)
+        self.side_dock.setWidget(panel_container)
         self.side_dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self.side_dock.setTitleBarWidget(QWidget())  # Hide title bar
         self.side_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea)
 
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.side_dock)
 
-        # Connect signals
+        # Connect activity bar signals
+        self.activity_bar.panel_selected.connect(self._on_panel_selected)
+
+        # Connect AI panel signals
         self.side_panel.message_sent.connect(self._on_chat_message)
         self.side_panel.settings_requested.connect(self._show_settings)
         self.side_panel.collapse_requested.connect(self._collapse_side_panel)
@@ -302,7 +322,12 @@ class MainWindow(QMainWindow):
         self.side_panel.new_tab_with_code_requested.connect(self._new_tab_with_code)
         self.side_panel.context_requested.connect(self._on_context_requested)
         self.side_panel.replace_selection_requested.connect(self._replace_selection)
-        self.collapsed_panel.expand_requested.connect(self._expand_side_panel)
+
+        # Connect file browser signals
+        self.file_browser.file_selected.connect(self._open_file_path)
+
+        # Track current active panel
+        self._active_panel = "ai"
 
         # Restore state from settings
         visible = self.settings_manager.get_side_panel_visible()
@@ -495,9 +520,9 @@ class MainWindow(QMainWindow):
         view_menu.addSeparator()
 
         # Side panel toggle
-        self.toggle_panel_action = QAction(self.tr("AI Panel"), self)
+        self.toggle_panel_action = QAction(self.tr("Side Panel"), self)
         self.toggle_panel_action.setCheckable(True)
-        self.toggle_panel_action.setChecked(self.panel_stack.currentIndex() == 0)
+        self.toggle_panel_action.setChecked(self.panel_content.isVisible())
         self.toggle_panel_action.setShortcut(QKeySequence("Ctrl+Shift+A"))
         self.toggle_panel_action.toggled.connect(self._toggle_side_panel)
         view_menu.addAction(self.toggle_panel_action)
@@ -510,20 +535,40 @@ class MainWindow(QMainWindow):
         settings_action.triggered.connect(self._show_settings)
         view_menu.addAction(settings_action)
 
+    def _on_panel_selected(self, panel_id: str):
+        """Switch to selected panel in activity bar."""
+        # If clicking the already-active panel, toggle collapse
+        if panel_id == self._active_panel and self.panel_content.isVisible():
+            self._collapse_side_panel()
+            return
+
+        # Switch to the selected panel
+        self._active_panel = panel_id
+        if panel_id == "ai":
+            self.panel_content.setCurrentIndex(0)
+        elif panel_id == "files":
+            self.panel_content.setCurrentIndex(1)
+
+        self._expand_side_panel()
+        self.activity_bar.set_active(panel_id)
+
     def _collapse_side_panel(self):
-        """Collapse the side panel to thin strip."""
-        self.panel_stack.setCurrentIndex(1)  # Show collapsed panel
+        """Collapse to activity bar only."""
+        self.panel_content.hide()
         self.side_dock.setFixedWidth(36)
+        self.activity_bar.set_collapsed(True)
         self.settings_manager.set_side_panel_visible(False)
         if hasattr(self, "toggle_panel_action"):
             self.toggle_panel_action.setChecked(False)
 
     def _expand_side_panel(self):
-        """Expand the side panel to full width."""
-        self.panel_stack.setCurrentIndex(0)  # Show expanded panel
+        """Expand to show content panel."""
+        self.panel_content.show()
         self.side_dock.setMinimumWidth(320)
         self.side_dock.setMaximumWidth(500)
+        self.activity_bar.set_collapsed(False)
         self.settings_manager.set_side_panel_visible(True)
+        self.activity_bar.set_active(self._active_panel)
         if hasattr(self, "toggle_panel_action"):
             self.toggle_panel_action.setChecked(True)
 
@@ -860,8 +905,9 @@ class MainWindow(QMainWindow):
         self._apply_theme()
         self._update_new_tab_button_style()
 
-        # Apply to side panel and formatting toolbar
+        # Apply to side panel, file browser, and formatting toolbar
         self.side_panel.apply_theme()
+        self.file_browser.apply_theme()
         self.formatting_toolbar.apply_theme(theme)
 
         # Apply to all editor tabs
