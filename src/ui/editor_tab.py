@@ -49,6 +49,7 @@ class EditorTab(QPlainTextEdit):
         self._highlighter = None
         self._settings = SettingsManager()
         self._theme: EditorTheme = self._settings.get_current_theme()
+        self._highlight_line = False  # Notepad-style: no line highlight, just cursor
 
         self._setup_editor()
         self._setup_line_numbers()

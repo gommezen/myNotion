@@ -13,7 +13,6 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QInputDialog,
-    QLabel,
     QLineEdit,
     QMenu,
     QPushButton,
@@ -28,95 +27,94 @@ from core.settings import SettingsManager
 
 # ─── Data ───
 MODELS = [
+    {"id": "qwen2.5:7b-instruct-q4_0", "name": "Qwen 2.5", "tag": "7B"},
     {"id": "llama3.2:latest", "name": "Llama 3.2", "tag": "3B"},
-    {"id": "phi3:latest", "name": "Phi 3", "tag": "3.8B"},
-    {"id": "qwen2:1.5b", "name": "Qwen 2", "tag": "1.5B"},
-    {"id": "gemma2:2b", "name": "Gemma 2", "tag": "2B"},
-    {"id": "mistral", "name": "Mistral", "tag": "7B"},
-    {"id": "llama3.1", "name": "Llama 3.1", "tag": "8B"},
-    {"id": "codellama", "name": "Code Llama", "tag": "7B"},
-    {"id": "deepseek-coder", "name": "DeepSeek", "tag": "6.7B"},
+    {"id": "gemma3:4b", "name": "Gemma 3", "tag": "4B"},
+    {"id": "mistral:7b-instruct-q4_0", "name": "Mistral", "tag": "7B"},
+    {"id": "llama3.1:8b-instruct-q4_0", "name": "Llama 3.1", "tag": "8B Q4"},
+    {"id": "llama3.1:8b-instruct-q8_0", "name": "Llama 3.1", "tag": "8B Q8"},
 ]
 
-# Grid slots: assigned actions + empty placeholders
-# "type" key: "app" for shortcuts, "prompt" for AI actions, None for empty
-INITIAL_GRID = [
-    {"id": 1, "type": "app", "label": "gmail", "icon": "✉", "url": "https://mail.google.com"},
-    {"id": 2, "type": "app", "label": "claude", "icon": "◈", "url": "https://claude.ai"},
-    {"id": 3, "type": "prompt", "label": "explain", "icon": "✦", "prompt": "Explain this code"},
-    {"id": 4, "type": None, "label": None, "icon": None},
-    {"id": 5, "type": None, "label": None, "icon": None},
-    {"id": 6, "type": None, "label": None, "icon": None},
-]
-
-# AI-specific quick prompts (inline row above grid)
+# AI prompts with icons (card-style layout)
 # Special actions: "transfer", "examples", "custom" have action handlers instead of prompts
-# Prompts that modify code should request the full code back for replacement
 AI_PROMPTS = [
     {
         "label": "Explain",
+        "icon": "◎",
         "prompt": "Explain this code in detail",
         "tip": "Describe what the code does and how it works",
     },
     {
         "label": "Docstring",
+        "icon": "☰",
         "prompt": "Add Google-style docstrings to this code. Return the complete code with docstrings added",
         "tip": "Add documentation strings to functions/classes",
     },
     {
         "label": "Simplify",
+        "icon": "◇",
         "prompt": "Simplify this code while keeping the same behavior. Return the simplified code",
         "tip": "Make code shorter and easier to read",
     },
     {
         "label": "Debug",
+        "icon": "⚡",
         "prompt": "Find bugs and potential issues in this code",
         "tip": "Find bugs and potential issues",
     },
     {
         "label": "Summarize",
+        "icon": "≡",
         "prompt": "Summarize what this code or text does",
         "tip": "Brief overview of what the code does",
     },
     {
         "label": "Fix",
+        "icon": "✓",
         "prompt": "Fix any errors or issues in this code. Return the corrected code",
         "tip": "Correct errors and issues in code",
     },
     {
         "label": "Improve",
+        "icon": "▲",
         "prompt": "Improve this code's quality and readability. Return the improved code",
         "tip": "Enhance code quality and readability",
     },
     {
         "label": "Translate",
+        "icon": "⇄",
         "prompt": "Translate this code to another programming language",
         "tip": "Convert code to a different language",
     },
     {
         "label": "Refactor",
+        "icon": "⟳",
         "prompt": "Refactor this code to be cleaner and more maintainable. Return the refactored code",
         "tip": "Restructure code without changing behavior",
     },
     {
         "label": "Test",
+        "icon": "▣",
         "prompt": "Generate unit tests for this code",
         "tip": "Generate unit tests for the code",
     },
     {
         "label": "Custom",
+        "icon": "✎",
         "prompt": None,
         "action": "custom",
         "tip": "Enter your own prompt",
     },
     {
         "label": "Examples",
+        "icon": "⊕",
         "prompt": None,
         "action": "examples",
         "tip": "Generate more examples from last response",
     },
     {
         "label": "Transfer",
+        "icon": "↳",
         "prompt": None,
         "action": "transfer",
         "tip": "Insert last code block into editor",
@@ -251,60 +249,28 @@ class SidePanel(QWidget):
         prompts_layout.addWidget(self.prompts_toggle, alignment=Qt.AlignmentFlag.AlignLeft)
 
         # Prompts grid (collapsible) - 3 columns to fit in panel
+        # Prompts grid (2 columns, card style with icons)
         self.prompts_container = QWidget()
         prompts_grid = QGridLayout(self.prompts_container)
-        prompts_grid.setContentsMargins(0, 4, 0, 0)
-        prompts_grid.setSpacing(2)
+        prompts_grid.setContentsMargins(0, 6, 0, 0)
+        prompts_grid.setSpacing(6)
 
         self.prompt_buttons: list[QPushButton] = []
         for i, prompt in enumerate(AI_PROMPTS):
-            btn = QPushButton(prompt["label"])
+            # Card button with icon above label
+            icon = prompt.get("icon", "")
+            label = prompt["label"]
+            btn = QPushButton(f"{icon}\n{label}")
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setToolTip(prompt.get("tip", ""))
+            btn.setFixedHeight(72)
             btn.clicked.connect(lambda checked, p=prompt: self._on_prompt_click(p))
             self.prompt_buttons.append(btn)
-            row, col = i // 3, i % 3
+            row, col = i // 2, i % 2  # 2 columns
             prompts_grid.addWidget(btn, row, col)
 
         prompts_layout.addWidget(self.prompts_container)
         layout.addWidget(prompts_section)
-
-        # ─── Quick Actions Grid ───
-        grid_section = QWidget()
-        grid_layout = QVBoxLayout(grid_section)
-        grid_layout.setContentsMargins(16, 6, 16, 8)
-        grid_layout.setSpacing(8)
-
-        self.grid_label = QLabel("Quick Actions")
-        grid_layout.addWidget(self.grid_label)
-
-        # 3x2 grid
-        grid_widget = QWidget()
-        grid = QGridLayout(grid_widget)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(6)
-
-        self.grid_buttons: list[QPushButton] = []
-        for i, slot in enumerate(INITIAL_GRID):
-            row, col = i // 3, i % 3
-            btn = QPushButton()
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setFixedHeight(42)
-
-            if slot["type"]:
-                btn.setText(f"{slot['icon']}\n{slot['label']}")
-                btn.setProperty("filled", True)
-                btn.clicked.connect(lambda checked, s=slot: self._on_grid_click(s))
-            else:
-                btn.setText("+")
-                btn.setProperty("filled", False)
-                btn.setToolTip("Add shortcut")
-
-            self.grid_buttons.append(btn)
-            grid.addWidget(btn, row, col)
-
-        grid_layout.addWidget(grid_widget)
-        layout.addWidget(grid_section)
 
         # ─── Input area ───
         input_section = QWidget()
@@ -521,12 +487,6 @@ class SidePanel(QWidget):
             )
             self.append_message("user", "[Continue...]")
             self._start_ai_generation(prompt)
-
-    def _on_grid_click(self, slot: dict):
-        if slot["type"] == "app" and "url" in slot:
-            QDesktopServices.openUrl(QUrl(slot["url"]))
-        elif slot["type"] == "prompt" and "prompt" in slot:
-            self._on_prompt_click(slot)
 
     def execute_prompt_with_context(
         self, prompt: str, context: str | None, is_selection: bool = False
@@ -787,69 +747,24 @@ class SidePanel(QWidget):
             }}
         """)
 
-        # Prompt chips
+        # Prompt cards (icon + label)
         for btn in self.prompt_buttons:
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background: transparent;
-                    border: none;
-                    color: {text_dim};
-                    font-size: 10px;
-                    padding: 3px 7px;
-                    border-radius: 2px;
-                    letter-spacing: 0.02em;
+                    border: 1px solid rgba(127, 191, 181, 0.2);
+                    border-radius: 4px;
+                    color: #7fbfb5;
+                    font-size: 12px;
+                    padding: 10px 4px;
+                    line-height: 1.4;
                 }}
                 QPushButton:hover {{
                     color: {text_main};
-                    background: rgba(180,210,190,0.08);
+                    border-color: rgba(127, 191, 181, 0.4);
+                    background: rgba(127, 191, 181, 0.05);
                 }}
             """)
-
-        # Grid label
-        self.grid_label.setStyleSheet("""
-            QLabel {
-                font-size: 10px;
-                font-weight: 600;
-                letter-spacing: 0.1em;
-                text-transform: uppercase;
-                color: rgba(180,210,190,0.4);
-                background: transparent;
-            }
-        """)
-
-        # Grid buttons
-        for btn in self.grid_buttons:
-            if btn.property("filled"):
-                btn.setStyleSheet(f"""
-                    QPushButton {{
-                        background: transparent;
-                        border: 1px solid rgba(180,210,190,0.1);
-                        border-radius: 3px;
-                        color: rgba(180,210,190,0.6);
-                        font-size: 10px;
-                        padding: 4px;
-                    }}
-                    QPushButton:hover {{
-                        color: {text_main};
-                        background: rgba(180,210,190,0.08);
-                    }}
-                """)
-            else:
-                btn.setStyleSheet("""
-                    QPushButton {
-                        background: transparent;
-                        border: 1px dashed rgba(180,210,190,0.12);
-                        border-radius: 3px;
-                        color: rgba(180,210,190,0.18);
-                        font-size: 16px;
-                        font-weight: 300;
-                        padding: 4px;
-                    }
-                    QPushButton:hover {
-                        border-color: rgba(180,210,190,0.25);
-                        color: rgba(180,210,190,0.35);
-                    }
-                """)
 
         # Model button
         self.model_btn.setStyleSheet(f"""

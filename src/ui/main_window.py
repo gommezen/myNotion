@@ -88,7 +88,7 @@ class MainWindow(QMainWindow):
                 color: {fg};
                 border: none;
                 padding: 2px;
-                font-size: 10px;
+                font-size: 11px;
             }}
             QMenuBar::item {{
                 padding: 4px 8px;
@@ -102,7 +102,7 @@ class MainWindow(QMainWindow):
                 color: {fg};
                 border: 1px solid {chrome_border};
                 padding: 4px 0px;
-                font-size: 10px;
+                font-size: 11px;
             }}
             QMenu::item {{
                 padding: 6px 30px 6px 20px;
@@ -142,12 +142,12 @@ class MainWindow(QMainWindow):
                 background-color: {bg};
             }}
             QTabBar {{
-                background-color: {chrome_hover};
-                font-size: 10px;
+                background-color: #121f1f;
+                font-size: 11px;
             }}
             QTabBar::tab {{
-                background-color: {chrome_hover};
-                color: rgba(255, 255, 255, 0.5);
+                background-color: #121f1f;
+                color: rgba(180, 210, 190, 0.35);
                 padding: 6px 12px 6px 10px;
                 border: none;
                 min-width: 80px;
@@ -155,17 +155,18 @@ class MainWindow(QMainWindow):
             }}
             QTabBar::tab:selected {{
                 background-color: {bg};
-                color: {fg};
+                color: #c8e0ce;
+                border-top: 2px solid #d4a84b;
             }}
             QTabBar::tab:hover:!selected {{
-                background-color: {chrome_border};
-                color: rgba(255, 255, 255, 0.7);
+                background-color: #1a2a2a;
+                color: rgba(180, 210, 190, 0.6);
             }}
             QStatusBar {{
                 background-color: {chrome_bg};
                 color: {fg};
                 border-top: 1px solid {chrome_border};
-                font-size: 10px;
+                font-size: 11px;
             }}
             QStatusBar::item {{
                 border: none;
