@@ -315,7 +315,6 @@ class MainWindow(QMainWindow):
         self.activity_bar.panel_selected.connect(self._on_panel_selected)
 
         # Connect AI panel signals
-        self.side_panel.message_sent.connect(self._on_chat_message)
         self.side_panel.settings_requested.connect(self._show_settings)
         self.side_panel.collapse_requested.connect(self._collapse_side_panel)
         self.side_panel.transfer_to_editor_requested.connect(self._insert_code_to_editor)
@@ -335,14 +334,6 @@ class MainWindow(QMainWindow):
             self._expand_side_panel()
         else:
             self._collapse_side_panel()
-
-    def _on_chat_message(self, message: str, model_id: str, context_mode: str):
-        """Handle AI chat message - placeholder for Ollama integration."""
-        # TODO: Connect to Ollama AI client when implemented
-        # message: user's query
-        # model_id: selected model (e.g., llama3.2)
-        # context_mode: "selection", "file", or "project"
-        pass
 
     def _on_context_requested(self, prompt: str):
         """Handle AI prompt that needs editor context.
