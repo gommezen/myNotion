@@ -81,14 +81,14 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(f"""
             QMainWindow {{
                 background-color: {bg};
-                font-size: 11px;
+                font-size: 10px;
             }}
             QMenuBar {{
                 background-color: {chrome_bg};
                 color: {fg};
                 border: none;
                 padding: 2px;
-                font-size: 11px;
+                font-size: 10px;
             }}
             QMenuBar::item {{
                 padding: 4px 8px;
@@ -102,7 +102,7 @@ class MainWindow(QMainWindow):
                 color: {fg};
                 border: 1px solid {chrome_border};
                 padding: 4px 0px;
-                font-size: 11px;
+                font-size: 10px;
             }}
             QMenu::item {{
                 padding: 6px 30px 6px 20px;
@@ -129,7 +129,7 @@ class MainWindow(QMainWindow):
                 border-radius: 3px;
                 padding: 4px 10px;
                 font-weight: bold;
-                font-size: 11px;
+                font-size: 10px;
             }}
             QToolBar QToolButton:hover {{
                 background-color: {chrome_hover};
@@ -143,7 +143,7 @@ class MainWindow(QMainWindow):
             }}
             QTabBar {{
                 background-color: {chrome_hover};
-                font-size: 11px;
+                font-size: 10px;
             }}
             QTabBar::tab {{
                 background-color: {chrome_hover};
@@ -165,7 +165,7 @@ class MainWindow(QMainWindow):
                 background-color: {chrome_bg};
                 color: {fg};
                 border-top: 1px solid {chrome_border};
-                font-size: 11px;
+                font-size: 10px;
             }}
             QStatusBar::item {{
                 border: none;
@@ -173,7 +173,7 @@ class MainWindow(QMainWindow):
             QStatusBar QLabel {{
                 color: {fg};
                 padding: 2px 12px;
-                font-size: 11px;
+                font-size: 10px;
             }}
             QStatusBar QLabel:hover {{
                 background-color: {chrome_hover};
@@ -299,6 +299,8 @@ class MainWindow(QMainWindow):
         self.side_panel.collapse_requested.connect(self._collapse_side_panel)
         self.side_panel.transfer_to_editor_requested.connect(self._insert_code_to_editor)
         self.side_panel.new_tab_with_code_requested.connect(self._new_tab_with_code)
+        self.side_panel.context_requested.connect(self._on_context_requested)
+        self.side_panel.replace_selection_requested.connect(self._replace_selection)
         self.collapsed_panel.expand_requested.connect(self._expand_side_panel)
 
         # Restore state from settings
@@ -315,6 +317,44 @@ class MainWindow(QMainWindow):
         # model_id: selected model (e.g., llama3.2)
         # context_mode: "selection", "file", or "project"
         pass
+
+    def _on_context_requested(self, prompt: str):
+        """Handle AI prompt that needs editor context.
+
+        Gets selected text (or full file if no selection) from the current
+        editor and passes it to the side panel for AI generation.
+        """
+        context = None
+        is_selection = False
+        editor = self.current_editor()
+
+        if editor:
+            # Try to get selected text first
+            cursor = editor.textCursor()
+            selected_text = cursor.selectedText()
+
+            if selected_text:
+                # QTextCursor uses Unicode paragraph separator, replace with newline
+                context = selected_text.replace("\u2029", "\n")
+                is_selection = True
+            else:
+                # No selection - use full file content
+                context = editor.toPlainText()
+
+        self.side_panel.execute_prompt_with_context(prompt, context, is_selection)
+
+    def _replace_selection(self, new_code: str):
+        """Replace the current selection in the editor with new code.
+
+        Called when user clicks "Replace" on an AI-generated code block.
+        """
+        editor = self.current_editor()
+        if editor:
+            cursor = editor.textCursor()
+            if cursor.hasSelection():
+                # Replace the selected text with new code
+                cursor.insertText(new_code)
+                editor.setTextCursor(cursor)
 
     def _insert_code_to_editor(self, code: str):
         """Insert code at cursor position in current editor."""

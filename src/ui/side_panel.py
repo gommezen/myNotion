@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QGridLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMenu,
@@ -49,14 +50,77 @@ INITIAL_GRID = [
 ]
 
 # AI-specific quick prompts (inline row above grid)
-# "Transfer" and "Examples" are special actions
+# Special actions: "transfer", "examples", "custom" have action handlers instead of prompts
+# Prompts that modify code should request the full code back for replacement
 AI_PROMPTS = [
-    {"label": "Explain", "prompt": "Explain this code"},
-    {"label": "Docstring", "prompt": "Add docstrings"},
-    {"label": "Simplify", "prompt": "Simplify this"},
-    {"label": "Debug", "prompt": "Find bugs"},
-    {"label": "Examples", "prompt": None, "action": "examples"},
-    {"label": "Transfer", "prompt": None, "action": "transfer"},
+    {
+        "label": "Explain",
+        "prompt": "Explain this code in detail",
+        "tip": "Describe what the code does and how it works",
+    },
+    {
+        "label": "Docstring",
+        "prompt": "Add Google-style docstrings to this code. Return the complete code with docstrings added",
+        "tip": "Add documentation strings to functions/classes",
+    },
+    {
+        "label": "Simplify",
+        "prompt": "Simplify this code while keeping the same behavior. Return the simplified code",
+        "tip": "Make code shorter and easier to read",
+    },
+    {
+        "label": "Debug",
+        "prompt": "Find bugs and potential issues in this code",
+        "tip": "Find bugs and potential issues",
+    },
+    {
+        "label": "Summarize",
+        "prompt": "Summarize what this code or text does",
+        "tip": "Brief overview of what the code does",
+    },
+    {
+        "label": "Fix",
+        "prompt": "Fix any errors or issues in this code. Return the corrected code",
+        "tip": "Correct errors and issues in code",
+    },
+    {
+        "label": "Improve",
+        "prompt": "Improve this code's quality and readability. Return the improved code",
+        "tip": "Enhance code quality and readability",
+    },
+    {
+        "label": "Translate",
+        "prompt": "Translate this code to another programming language",
+        "tip": "Convert code to a different language",
+    },
+    {
+        "label": "Refactor",
+        "prompt": "Refactor this code to be cleaner and more maintainable. Return the refactored code",
+        "tip": "Restructure code without changing behavior",
+    },
+    {
+        "label": "Test",
+        "prompt": "Generate unit tests for this code",
+        "tip": "Generate unit tests for the code",
+    },
+    {
+        "label": "Custom",
+        "prompt": None,
+        "action": "custom",
+        "tip": "Enter your own prompt",
+    },
+    {
+        "label": "Examples",
+        "prompt": None,
+        "action": "examples",
+        "tip": "Generate more examples from last response",
+    },
+    {
+        "label": "Transfer",
+        "prompt": None,
+        "action": "transfer",
+        "tip": "Insert last code block into editor",
+    },
 ]
 
 CONTEXT_MODES = [
@@ -119,11 +183,13 @@ class SidePanel(QWidget):
     """AI Chat Panel with Metropolis Art Deco aesthetic."""
 
     message_sent = pyqtSignal(str, str, str)  # message, model_id, context_mode
-    quick_action_triggered = pyqtSignal(str)  # prompt
+    quick_action_triggered = pyqtSignal(str)  # prompt - requests context from main window
     settings_requested = pyqtSignal()
     collapse_requested = pyqtSignal()
     transfer_to_editor_requested = pyqtSignal(str)  # code content
     new_tab_with_code_requested = pyqtSignal(str, str)  # code content, language
+    context_requested = pyqtSignal(str)  # prompt - emitted when AI prompt needs editor context
+    replace_selection_requested = pyqtSignal(str)  # new code - replaces selected text in editor
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -134,6 +200,7 @@ class SidePanel(QWidget):
         self._current_ai_response = ""  # Buffer for streaming response
         self._chat_html_before_response = ""  # HTML state before AI response
         self._code_blocks: list[tuple[str, str]] = []  # [(code, language), ...]
+        self._has_selection_to_replace = False  # True when AI response can replace editor selection
         self._setup_ui()
         self._apply_theme()
         self._setup_ai()
@@ -193,6 +260,7 @@ class SidePanel(QWidget):
         for i, prompt in enumerate(AI_PROMPTS):
             btn = QPushButton(prompt["label"])
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setToolTip(prompt.get("tip", ""))
             btn.clicked.connect(lambda checked, p=prompt: self._on_prompt_click(p))
             self.prompt_buttons.append(btn)
             row, col = i // 3, i % 3
@@ -309,7 +377,7 @@ class SidePanel(QWidget):
         self.prompts_toggle.setText(f"AI Prompts {'▾' if self.prompts_visible else '▸'}")
 
     def _on_prompt_click(self, prompt: dict):
-        # Handle special actions (e.g., Transfer, Examples)
+        # Handle special actions (e.g., Transfer, Examples, Custom)
         action = prompt.get("action")
         if action == "transfer":
             self._transfer_to_editor()
@@ -317,10 +385,12 @@ class SidePanel(QWidget):
         if action == "examples":
             self._generate_more_examples()
             return
+        if action == "custom":
+            self._show_custom_prompt_dialog()
+            return
 
-        self.append_message("user", prompt["prompt"])
-        self.quick_action_triggered.emit(prompt["prompt"])
-        self._start_ai_generation(prompt["prompt"])
+        # Request context from main window - it will call execute_prompt_with_context
+        self.context_requested.emit(prompt["prompt"])
 
     def _generate_more_examples(self):
         """Generate more examples based on code in the last AI response."""
@@ -345,6 +415,20 @@ class SidePanel(QWidget):
             )
             self.append_message("user", "[More examples...]")
             self._start_ai_generation(prompt)
+
+    def _show_custom_prompt_dialog(self):
+        """Show dialog for entering a custom prompt."""
+        text, ok = QInputDialog.getText(
+            self,
+            "Custom Prompt",
+            "Enter your prompt for the selected code/text:",
+            QLineEdit.EchoMode.Normal,
+            "",
+        )
+        if ok and text.strip():
+            prompt = text.strip()
+            # Request context from main window - it will call execute_prompt_with_context
+            self.context_requested.emit(prompt)
 
     def _transfer_to_editor(self):
         """Extract code from last AI response and emit signal to insert in editor."""
@@ -408,7 +492,7 @@ class SidePanel(QWidget):
             QDesktopServices.openUrl(url)
 
     def _handle_code_action(self, action: str, code: str, language: str):
-        """Handle code block action (copy, insert, newtab)."""
+        """Handle code block action (copy, insert, newtab, replace)."""
         if action == "copy":
             clipboard = QApplication.clipboard()
             if clipboard:
@@ -420,6 +504,11 @@ class SidePanel(QWidget):
         elif action == "newtab":
             self.new_tab_with_code_requested.emit(code, language)
             self.append_message("system", "[Code opened in new tab]")
+        elif action == "replace":
+            self.replace_selection_requested.emit(code)
+            self.append_message("system", "[Selection replaced with new code]")
+            # Clear the flag after replacement
+            self._has_selection_to_replace = False
 
     def _continue_generation(self):
         """Continue generating from the last AI response."""
@@ -439,6 +528,34 @@ class SidePanel(QWidget):
         elif slot["type"] == "prompt" and "prompt" in slot:
             self._on_prompt_click(slot)
 
+    def execute_prompt_with_context(
+        self, prompt: str, context: str | None, is_selection: bool = False
+    ):
+        """Execute an AI prompt with editor context.
+
+        Called by main window after context_requested signal is emitted.
+
+        Args:
+            prompt: The prompt template (e.g., "Explain this code")
+            context: Selected text or file content from editor, or None
+            is_selection: True if context is selected text (enables Replace action)
+        """
+        # Track if we can offer "Replace" action for code blocks
+        self._has_selection_to_replace = is_selection and bool(context)
+
+        # Show prompt in chat
+        self.append_message("user", prompt)
+
+        if context:
+            # Combine prompt with context
+            full_prompt = f"{prompt}:\n\n```\n{context}\n```"
+        else:
+            # No context available - just use the prompt
+            full_prompt = prompt
+            self.append_message("system", "[No text selected - using prompt only]")
+
+        self._start_ai_generation(full_prompt)
+
     def _send_message(self):
         text = self.input_field.text().strip()
         if text:
@@ -457,7 +574,7 @@ class SidePanel(QWidget):
 
         # Escape HTML entities so code/HTML in responses displays as text
         escaped_text = html.escape(text)
-        msg_html = f'<p style="margin: 5px 0; line-height: 1.5;">{marker} <span style="color: {color}; font-size: 11px;">{escaped_text}</span></p>'
+        msg_html = f'<p style="margin: 5px 0; line-height: 1.5;">{marker} <span style="color: {color}; font-size: 10px;">{escaped_text}</span></p>'
         self.chat_area.append(msg_html)
 
     def _setup_ai(self):
@@ -510,7 +627,7 @@ class SidePanel(QWidget):
             continue_html = (
                 '<p style="margin: 8px 0 5px 0;">'
                 '<a href="action:continue" style="color: #7fbf8f; text-decoration: none; '
-                'font-size: 11px;">▶ Continue generating...</a></p>'
+                'font-size: 10px;">▶ Continue generating...</a></p>'
             )
             self.chat_area.append(continue_html)
 
@@ -546,6 +663,14 @@ class SidePanel(QWidget):
                 f"&nbsp;&nbsp;|&nbsp;&nbsp;"
                 f'<a href="code:newtab:{index}" style="{link_style}">New Tab</a>'
             )
+
+            # Add "Replace" action if we have a selection to replace
+            if self._has_selection_to_replace:
+                actions_html += (
+                    f"&nbsp;&nbsp;|&nbsp;&nbsp;"
+                    f'<a href="code:replace:{index}" style="{link_style}; '
+                    f'font-weight: bold;">Replace</a>'
+                )
 
             return (
                 f'<div style="background: rgba(0,0,0,0.3); border-radius: 4px; '
@@ -589,7 +714,7 @@ class SidePanel(QWidget):
         ai_response_html = (
             f'<p style="margin: 5px 0; line-height: 1.5;">'
             f'<span style="color: rgba(180,210,190,0.35); font-size: 7px;">◇</span> '
-            f'<span style="color: {color}; font-size: 11px;">{formatted_text}</span></p>'
+            f'<span style="color: {color}; font-size: 10px;">{formatted_text}</span></p>'
         )
 
         # Restore saved HTML and append the current AI response
@@ -640,7 +765,7 @@ class SidePanel(QWidget):
                 color: {text_main};
                 border: none;
                 padding: 8px 16px;
-                font-size: 11px;
+                font-size: 10px;
             }}
         """)
 
@@ -650,7 +775,7 @@ class SidePanel(QWidget):
                 background: transparent;
                 border: none;
                 color: rgba(180,210,190,0.4);
-                font-size: 11px;
+                font-size: 10px;
                 font-weight: 600;
                 padding: 2px 0;
                 letter-spacing: 0.1em;
@@ -669,7 +794,7 @@ class SidePanel(QWidget):
                     background: transparent;
                     border: none;
                     color: {text_dim};
-                    font-size: 11px;
+                    font-size: 10px;
                     padding: 3px 7px;
                     border-radius: 2px;
                     letter-spacing: 0.02em;
@@ -683,7 +808,7 @@ class SidePanel(QWidget):
         # Grid label
         self.grid_label.setStyleSheet("""
             QLabel {
-                font-size: 11px;
+                font-size: 10px;
                 font-weight: 600;
                 letter-spacing: 0.1em;
                 text-transform: uppercase;
@@ -701,7 +826,7 @@ class SidePanel(QWidget):
                         border: 1px solid rgba(180,210,190,0.1);
                         border-radius: 3px;
                         color: rgba(180,210,190,0.6);
-                        font-size: 11px;
+                        font-size: 10px;
                         padding: 4px;
                     }}
                     QPushButton:hover {{
@@ -732,7 +857,7 @@ class SidePanel(QWidget):
                 background: transparent;
                 border: none;
                 color: rgba(180,210,190,0.4);
-                font-size: 11px;
+                font-size: 10px;
                 font-weight: 600;
                 padding: 2px 0;
                 letter-spacing: 0.1em;
@@ -754,12 +879,12 @@ class SidePanel(QWidget):
                 border: 1px solid rgba(180,210,190,0.1);
                 border-radius: 3px;
                 padding: 4px 0;
-                font-size: 11px;
+                font-size: 10px;
             }}
             QMenu::item {{
                 color: rgba(180,210,190,0.6);
                 padding: 6px 12px;
-                font-size: 11px;
+                font-size: 10px;
             }}
             QMenu::item:selected {{
                 color: {text_main};
@@ -783,7 +908,7 @@ class SidePanel(QWidget):
                 background: transparent;
                 border: none;
                 color: #c8e0ce;
-                font-size: 11px;
+                font-size: 10px;
                 padding: 0;
             }
         """)

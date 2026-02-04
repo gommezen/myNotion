@@ -103,7 +103,7 @@ class FormattingToolbar(QWidget):
                 border-radius: 3px;
                 padding: 4px 10px;
                 font-weight: bold;
-                font-size: 11px;
+                font-size: 10px;
             }}
             QToolButton:hover {{
                 background-color: {theme.chrome_hover};

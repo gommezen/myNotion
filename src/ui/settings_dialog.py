@@ -16,8 +16,8 @@ from PyQt6.QtWidgets import (
 
 from core.settings import THEMES, SettingsManager
 
-# Common font sizes for the dropdown
-FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 32, 36, 42, 48, 56, 64, 72]
+# Common font sizes for the dropdown (starting at 10)
+FONT_SIZES = [10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 32, 36, 42, 48, 56, 64, 72]
 
 # Good monospace fonts that work well on Windows
 SAFE_MONOSPACE_FONTS = [

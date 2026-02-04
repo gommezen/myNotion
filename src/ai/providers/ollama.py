@@ -12,12 +12,12 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_HOST = "http://localhost:11434"
 
-# System prompt to encourage detailed, well-formatted responses
-DEFAULT_SYSTEM_PROMPT = """You are a helpful coding assistant. When providing code:
-1. Always wrap code in markdown code blocks with the language specified (e.g., ```python)
-2. Provide clear explanations before and after code examples
-3. Include comments in the code to explain key parts
-4. Give complete, working examples rather than snippets"""
+# System prompt for concise, well-formatted responses
+DEFAULT_SYSTEM_PROMPT = """You are a concise coding assistant. Rules:
+- Wrap code in markdown blocks with language (```python)
+- Be brief: 1-2 sentences before code, key points only after
+- Code comments for non-obvious parts only
+- Skip obvious explanations, focus on what matters"""
 
 
 class OllamaClient:

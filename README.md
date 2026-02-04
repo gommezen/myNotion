@@ -1,6 +1,6 @@
 # MyNotion
 
-A lightweight text and code editor built with Python and PyQt6, featuring syntax highlighting, multiple themes, and planned local AI integration.
+A lightweight text and code editor built with Python and PyQt6, featuring syntax highlighting, multiple themes, and local AI integration via Ollama.
 
 ## Features
 
@@ -11,6 +11,11 @@ A lightweight text and code editor built with Python and PyQt6, featuring syntax
 - **Line numbers** — With current line highlighting
 - **Recent files** — Quick access to recently opened files
 - **Zoom** — Ctrl+Plus/Minus to adjust font size
+- **AI Assistant** — Local AI integration via Ollama
+  - 13 built-in prompts: Explain, Docstring, Simplify, Debug, Summarize, Fix, Improve, Translate, Refactor, Test, Custom, Examples, Transfer
+  - Works on selected code or full file
+  - "Replace" action to apply AI suggestions directly
+  - Streaming responses with code block formatting
 
 ## Screenshots
 
@@ -92,7 +97,7 @@ src/
 ├── core/                # Core functionality
 │   ├── settings.py      # App settings (QSettings wrapper)
 │   └── recent_files.py  # Recent files tracking
-├── ai/                  # Local AI integration (planned)
+├── ai/                  # Local AI integration (Ollama)
 └── syntax/              # Syntax highlighting
     └── highlighter.py   # QSyntaxHighlighter implementations
 ```
@@ -132,7 +137,7 @@ scripts\quality_check.bat
 
 - [ ] Find & Replace functionality
 - [ ] Unsaved changes warning on close
-- [ ] Local AI integration (Ollama)
+- [x] Local AI integration (Ollama)
 - [ ] File tree sidebar
 - [ ] Split view editing
 
