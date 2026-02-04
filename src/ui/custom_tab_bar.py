@@ -33,8 +33,9 @@ class CloseButton(QPushButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        pen = QPen(QColor("#CCCCCC"))
-        pen.setWidth(2)
+        # Lighter color to match tab text
+        pen = QPen(QColor("#9a9a9a"))
+        pen.setWidth(1)
         painter.setPen(pen)
 
         margin = 4

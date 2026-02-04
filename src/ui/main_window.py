@@ -147,7 +147,7 @@ class MainWindow(QMainWindow):
             }}
             QTabBar::tab {{
                 background-color: {chrome_bg};
-                color: {fg};
+                color: rgba(255, 255, 255, 0.6);
                 padding: 6px 12px 6px 8px;
                 border: none;
                 border-bottom: 2px solid transparent;
@@ -157,10 +157,11 @@ class MainWindow(QMainWindow):
             QTabBar::tab:selected {{
                 background-color: {bg};
                 color: {fg};
-                border-bottom: 2px solid {selection};
+                border-bottom: 2px solid {bg};
             }}
             QTabBar::tab:hover:!selected {{
                 background-color: {chrome_hover};
+                color: rgba(255, 255, 255, 0.8);
             }}
             QStatusBar {{
                 background-color: {chrome_bg};
