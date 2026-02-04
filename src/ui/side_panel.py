@@ -143,27 +143,11 @@ class SidePanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # ─── Header accent (zigzag pattern) ───
-        self.header_accent = QLabel("/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\")
-        self.header_accent.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.header_accent)
-
-        # ─── Header: context toggle left, door icon right ───
+        # ─── Header: door icon only ───
         header = QWidget()
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(16, 10, 16, 6)
         header_layout.setSpacing(2)
-
-        # Context mode toggle
-        self.context_buttons: list[QPushButton] = []
-        for mode in CONTEXT_MODES:
-            btn = QPushButton(mode["label"])
-            btn.setCheckable(True)
-            btn.setChecked(mode["id"] == self.context_mode)
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.clicked.connect(lambda checked, m=mode["id"]: self._set_context(m))
-            self.context_buttons.append(btn)
-            header_layout.addWidget(btn)
 
         header_layout.addStretch()
 
@@ -176,6 +160,9 @@ class SidePanel(QWidget):
         header_layout.addWidget(self.door_btn)
 
         layout.addWidget(header)
+
+        # Keep context_buttons as empty list for compatibility
+        self.context_buttons: list[QPushButton] = []
 
         # ─── Chat area ───
         self.chat_area = QTextBrowser()
@@ -315,8 +302,6 @@ class SidePanel(QWidget):
 
     def _set_context(self, mode: str):
         self.context_mode = mode
-        for btn, m in zip(self.context_buttons, CONTEXT_MODES, strict=False):
-            btn.setChecked(m["id"] == mode)
 
     def _toggle_prompts(self):
         self.prompts_visible = not self.prompts_visible
@@ -624,7 +609,6 @@ class SidePanel(QWidget):
         bg = "#1a2a2a"
         text_main = "#b4d2be"
         text_dim = "rgba(180,210,190,0.45)"
-        text_dimmer = "rgba(180,210,190,0.35)"
         accent = "#7fbf8f"
 
         self.setStyleSheet(f"""
@@ -633,18 +617,6 @@ class SidePanel(QWidget):
                 color: {text_main};
                 font-family: 'Consolas', 'SF Mono', monospace;
             }}
-        """)
-
-        # Header accent (zigzag pattern)
-        self.header_accent.setStyleSheet("""
-            QLabel {
-                color: rgba(180,210,190,0.35);
-                font-size: 14px;
-                font-weight: bold;
-                padding: 8px 12px 0;
-                letter-spacing: 0px;
-                background: transparent;
-            }
         """)
 
         # Door button (larger)
@@ -660,27 +632,6 @@ class SidePanel(QWidget):
                 color: {text_main};
             }}
         """)
-
-        # Context buttons
-        for btn in self.context_buttons:
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: transparent;
-                    border: none;
-                    color: {text_dimmer};
-                    font-size: 11px;
-                    padding: 3px 8px;
-                    border-radius: 2px;
-                    letter-spacing: 0.05em;
-                }}
-                QPushButton:checked {{
-                    color: {text_main};
-                    background: rgba(180,210,190,0.08);
-                }}
-                QPushButton:hover {{
-                    color: {text_main};
-                }}
-            """)
 
         # Chat area
         self.chat_area.setStyleSheet(f"""

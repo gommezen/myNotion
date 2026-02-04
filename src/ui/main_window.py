@@ -5,7 +5,13 @@ Main application window with tabs, menus, and toolbar.
 import contextlib
 from pathlib import Path
 
-from PyQt6.QtCore import QSettings, Qt, QTimer
+from PyQt6.QtCore import (
+    QEasingCurve,
+    QPropertyAnimation,
+    QSettings,
+    Qt,
+    QTimer,
+)
 from PyQt6.QtGui import (
     QAction,
     QActionGroup,
@@ -15,6 +21,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QDockWidget,
     QFileDialog,
+    QGraphicsOpacityEffect,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -141,14 +148,16 @@ class MainWindow(QMainWindow):
             QTabBar::tab {{
                 background-color: {chrome_bg};
                 color: {fg};
-                padding: 8px 20px;
+                padding: 6px 12px 6px 8px;
                 border: none;
-                border-right: 1px solid {chrome_border};
-                min-width: 100px;
+                border-bottom: 2px solid transparent;
+                min-width: 80px;
+                margin-right: 1px;
             }}
             QTabBar::tab:selected {{
                 background-color: {bg};
                 color: {fg};
+                border-bottom: 2px solid {selection};
             }}
             QTabBar::tab:hover:!selected {{
                 background-color: {chrome_hover};
@@ -553,11 +562,32 @@ class MainWindow(QMainWindow):
         event.accept()
 
     def _on_tab_changed(self, index: int):
-        """Handle tab change to update status bar."""
+        """Handle tab change to update status bar with fade transition."""
         editor = self.current_editor()
         if editor:
             self._update_language_indicator(editor.language)
             self._connect_editor_signals(editor)
+            # Apply fade-in transition
+            self._animate_tab_transition(editor)
+
+    def _animate_tab_transition(self, editor: EditorTab):
+        """Apply a subtle fade-in animation when switching tabs."""
+        # Create opacity effect if not exists
+        effect = editor.graphicsEffect()
+        if not isinstance(effect, QGraphicsOpacityEffect):
+            effect = QGraphicsOpacityEffect(editor)
+            editor.setGraphicsEffect(effect)
+
+        # Create and start fade-in animation
+        animation = QPropertyAnimation(effect, b"opacity", self)
+        animation.setDuration(150)  # 150ms for subtle transition
+        animation.setStartValue(0.7)
+        animation.setEndValue(1.0)
+        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        animation.start()
+
+        # Store reference to prevent garbage collection
+        self._tab_animation = animation
 
     def _connect_editor_signals(self, editor: EditorTab):
         """Connect editor signals for status bar updates."""
