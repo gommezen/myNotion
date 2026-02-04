@@ -63,3 +63,10 @@ Thumbs.db
 # Claude Code
 CLAUDE.md
 .claude/
+
+# Ruff cache
+.ruff_cache/
+
+# Local dev notes
+*.local.md
+notes/

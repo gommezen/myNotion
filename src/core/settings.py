@@ -134,23 +134,22 @@ THEMES: dict[str, EditorTheme] = {
     ),
     "Metropolis": EditorTheme(
         name="Metropolis",
-        background="#0D1A1A",
-        foreground="#E8E4D9",
-        line_number_bg="#122424",
-        line_number_fg="#7FBFB5",
-        current_line="#1A3333",
-        selection="#2D5A5A",
-        keyword="#D4A84B",
-        string="#A8D8D0",
-        comment="#4A8080",
-        number="#E8C547",
-        function="#7FBFB5",
-        class_name="#D4A84B",
-        decorator="#C45C5C",
-        # Metropolis green UI chrome
-        chrome_bg="#122424",
-        chrome_hover="#1A3333",
-        chrome_border="#2D5A5A",
+        background="#0D1A1A",  # 0D1A1Aeditor bg, active tab
+        foreground="#E8E4D9",  # main text color
+        line_number_bg="#122424",  #122424 line number gutter bg
+        line_number_fg="#7FBFB5",  # line number text
+        current_line="#1A3333",  # 1A3333 current line highlight
+        selection="#122424",  # text selection
+        keyword="#D4A84B",  # keywords (if, for, def)
+        string="#A8D8D0",  # string literals
+        comment="#4A8080",  # code comments
+        number="#E8C547",  # number literals
+        function="#7FBFB5",  # function names
+        class_name="#D4A84B",  # class names
+        decorator="#C45C5C",  # decorators (@)
+        chrome_bg="#122424",  # 122424 menu bar, toolbar bg
+        chrome_hover="#0D1A1A",  # inactive tabs
+        chrome_border="#1A3333",  # tab hover, borders
     ),
 }
 

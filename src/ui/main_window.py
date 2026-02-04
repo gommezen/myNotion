@@ -142,26 +142,24 @@ class MainWindow(QMainWindow):
                 background-color: {bg};
             }}
             QTabBar {{
-                background-color: {chrome_bg};
+                background-color: {chrome_hover};
                 font-size: 11px;
             }}
             QTabBar::tab {{
-                background-color: {chrome_bg};
-                color: rgba(255, 255, 255, 0.6);
-                padding: 6px 12px 6px 8px;
+                background-color: {chrome_hover};
+                color: rgba(255, 255, 255, 0.5);
+                padding: 6px 12px 6px 10px;
                 border: none;
-                border-bottom: 2px solid transparent;
                 min-width: 80px;
                 margin-right: 1px;
             }}
             QTabBar::tab:selected {{
                 background-color: {bg};
                 color: {fg};
-                border-bottom: 2px solid {bg};
             }}
             QTabBar::tab:hover:!selected {{
-                background-color: {chrome_hover};
-                color: rgba(255, 255, 255, 0.8);
+                background-color: {chrome_border};
+                color: rgba(255, 255, 255, 0.7);
             }}
             QStatusBar {{
                 background-color: {chrome_bg};

@@ -6,7 +6,7 @@ A lightweight text and code editor built with Python and PyQt6, featuring syntax
 
 - **Multi-tab editing** — Open and edit multiple files simultaneously
 - **Syntax highlighting** — Python, JavaScript, JSON, HTML, CSS, Markdown
-- **Color themes** — Dark (default), Monokai, Dracula, Light, Nord
+- **Color themes** — Dark (default), Monokai, Dracula, Light, Nord, Metropolis
 - **Customizable fonts** — Choose font family and size (Consolas 12 by default)
 - **Line numbers** — With current line highlighting
 - **Recent files** — Quick access to recently opened files
@@ -64,6 +64,19 @@ The executable will be in the `dist/` folder.
 ### Changing Theme
 
 Go to **Edit > Settings** or press `Ctrl+,` to open the settings dialog. Select your preferred theme and font settings.
+
+### Theme Colors (Metropolis)
+
+The Metropolis theme uses these green shades (lightest to darkest):
+
+| Element | Variable | Hex |
+|---------|----------|-----|
+| Selection highlight | `selection` | `#2D5A5A` |
+| Inactive tabs | `chrome_hover` | `#1A3333` |
+| Menu bar / toolbar | `chrome_bg` | `#122424` |
+| Active tab / editor | `background` | `#0D1A1A` |
+
+Theme colors can be customized in `src/core/settings.py`.
 
 ## Project Structure
 
