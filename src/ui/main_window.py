@@ -99,7 +99,7 @@ class MainWindow(QMainWindow):
                 background-color: transparent;
             }}
             QMenuBar::item:selected {{
-                background-color: {chrome_hover};
+                background-color: rgba(127, 191, 143, 0.2);
             }}
             QMenu {{
                 background-color: {chrome_bg};
@@ -112,7 +112,8 @@ class MainWindow(QMainWindow):
                 padding: 6px 30px 6px 20px;
             }}
             QMenu::item:selected {{
-                background-color: {selection};
+                background-color: rgba(127, 191, 143, 0.25);
+                color: #c8e0ce;
             }}
             QMenu::separator {{
                 height: 1px;

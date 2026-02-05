@@ -736,12 +736,14 @@ class SidePanel(QWidget):
                 QPushButton {{
                     background: transparent;
                     border: none;
+                    border-radius: 3px;
                     color: rgba(127, 191, 181, 0.6);
                     font-size: 11px;
                     padding: 6px 4px;
                     text-align: left;
                 }}
                 QPushButton:hover {{
+                    background: rgba(180,210,190,0.08);
                     color: {text_main};
                 }}
             """)
