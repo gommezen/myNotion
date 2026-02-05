@@ -223,3 +223,12 @@ class SettingsManager:
     def set_side_panel_shortcuts(self, shortcuts: list[dict]):
         """Save user-configured shortcuts."""
         self.settings.setValue("side_panel_shortcuts", shortcuts)
+
+    def get_layout_mode(self) -> str:
+        """Get the current layout mode (coding or writing)."""
+        return self.settings.value("layout_mode", "coding")
+
+    def set_layout_mode(self, mode: str):
+        """Set the layout mode (coding or writing)."""
+        if mode in ("coding", "writing"):
+            self.settings.setValue("layout_mode", mode)

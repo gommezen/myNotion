@@ -5,6 +5,7 @@ Based on ai-panel-redesign-v2_1.jsx — exact 1:1 implementation.
 
 import html
 import re
+from enum import Enum
 
 from PyQt6.QtCore import QEvent, Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
@@ -25,6 +26,14 @@ from PyQt6.QtWidgets import (
 from ai.worker import AIManager
 from core.settings import SettingsManager
 
+
+class LayoutMode(Enum):
+    """Layout modes for the side panel AI prompts."""
+
+    CODING = "coding"
+    WRITING = "writing"
+
+
 # ─── Data ───
 MODELS = [
     {"id": "qwen2.5:7b-instruct-q4_0", "name": "Qwen 2.5", "tag": "7B"},
@@ -35,6 +44,14 @@ MODELS = [
     {"id": "llama3.1:8b-instruct-q8_0", "name": "Llama 3.1", "tag": "8B Q8"},
 ]
 
+# ─── Default Models by Mode ───
+# Set default model when switching layout modes
+# Edit these to match your installed Ollama models
+DEFAULT_MODE_MODELS = {
+    "coding": "qwen2.5:7b-instruct-q4_0",  # Good for code tasks
+    "writing": "qwen2.5:7b-instruct-q4_0",  # Good for prose tasks (use larger model)
+}
+
 # ─── Auto-Model Routing ───
 # Maps prompt labels to preferred models for automatic selection
 # Edit model_id values to match your installed Ollama models
@@ -42,84 +59,131 @@ MODEL_ROUTING = {
     # Quick tasks → lightweight model (fast responses)
     "quick": {
         "model_id": "llama3.2:latest",
-        "prompts": ["Explain", "Docstring", "Simplify", "Summarize", "Examples", "Transfer"],
+        "prompts": [
+            "Explain",
+            "Docstring",
+            "Simplify",
+            "Summarize",
+            "Examples",
+            "Transfer",
+            "Expand",
+            "Shorten",
+        ],
     },
     # Deep review → heavier model (thorough analysis)
     "deep": {
         "model_id": "qwen2.5:7b-instruct-q4_0",
-        "prompts": ["Debug", "Fix", "Improve", "Refactor", "Test", "Translate"],
+        "prompts": ["Debug", "Fix", "Improve", "Refactor", "Test", "Translate", "Tone"],
     },
 }
 
 # AI prompts with icons (card-style layout)
 # Special actions: "transfer", "examples", "custom" have action handlers instead of prompts
+# Each prompt has a "modes" field: ["coding"], ["writing"], or ["coding", "writing"] for shared
 AI_PROMPTS = [
+    # Coding-only prompts
     {
         "label": "Explain",
         "icon": "◎",
         "prompt": "Explain this code in detail",
         "tip": "Describe what the code does and how it works",
+        "modes": ["coding"],
     },
     {
         "label": "Docstring",
         "icon": "☰",
         "prompt": "Add Google-style docstrings to this code. Return the complete code with docstrings added",
         "tip": "Add documentation strings to functions/classes",
+        "modes": ["coding"],
     },
     {
         "label": "Simplify",
         "icon": "◇",
         "prompt": "Simplify this code while keeping the same behavior. Return the simplified code",
         "tip": "Make code shorter and easier to read",
+        "modes": ["coding"],
     },
     {
         "label": "Debug",
         "icon": "⚡",
         "prompt": "Find bugs and potential issues in this code",
         "tip": "Find bugs and potential issues",
-    },
-    {
-        "label": "Summarize",
-        "icon": "≡",
-        "prompt": "Summarize what this code or text does",
-        "tip": "Brief overview of what the code does",
+        "modes": ["coding"],
     },
     {
         "label": "Fix",
         "icon": "✓",
         "prompt": "Fix any errors or issues in this code. Return the corrected code",
         "tip": "Correct errors and issues in code",
-    },
-    {
-        "label": "Improve",
-        "icon": "▲",
-        "prompt": "Improve this code's quality and readability. Return the improved code",
-        "tip": "Enhance code quality and readability",
-    },
-    {
-        "label": "Translate",
-        "icon": "⇄",
-        "prompt": "Translate this code to another programming language",
-        "tip": "Convert code to a different language",
+        "modes": ["coding"],
     },
     {
         "label": "Refactor",
         "icon": "⟳",
         "prompt": "Refactor this code to be cleaner and more maintainable. Return the refactored code",
         "tip": "Restructure code without changing behavior",
+        "modes": ["coding"],
     },
     {
         "label": "Test",
         "icon": "▣",
         "prompt": "Generate unit tests for this code",
         "tip": "Generate unit tests for the code",
+        "modes": ["coding"],
     },
+    # Writing-only prompts
+    {
+        "label": "Summarize",
+        "icon": "≡",
+        "prompt": "Summarize this text in 2-3 sentences maximum. Put each sentence on its own line. Be extremely concise",
+        "tip": "Brief overview of the text",
+        "modes": ["writing"],
+    },
+    {
+        "label": "Improve",
+        "icon": "▲",
+        "prompt": "Improve this text's clarity, grammar, and readability. Keep the same length and preserve line breaks. Return only the improved text",
+        "tip": "Enhance writing quality and readability",
+        "modes": ["writing"],
+    },
+    {
+        "label": "Translate",
+        "icon": "⇄",
+        "prompt": None,
+        "action": "translate",
+        "tip": "Convert text to a different language",
+        "modes": ["writing"],
+    },
+    {
+        "label": "Expand",
+        "icon": "+",
+        "prompt": "Expand this text with more detail, examples, or explanations. Make it about 2x longer. Return only the expanded text",
+        "tip": "Add more depth and detail",
+        "modes": ["writing"],
+    },
+    {
+        "label": "Tone",
+        "icon": "~",
+        "prompt": None,
+        "action": "tone",
+        "tip": "Change writing tone",
+        "modes": ["writing"],
+    },
+    {
+        "label": "Shorten",
+        "icon": "-",
+        "prompt": "Shorten this text to about half its length or less. Remove redundancy, keep only essential points. Return only the shortened text, no explanations",
+        "tip": "Make more concise",
+        "modes": ["writing"],
+    },
+    # Shared prompts (appear in both modes)
     {
         "label": "Custom",
         "icon": "✎",
         "prompt": None,
         "action": "custom",
         "tip": "Enter your own prompt",
+        "modes": ["coding", "writing"],
     },
     {
         "label": "Examples",
@@ -127,6 +191,7 @@ AI_PROMPTS = [
         "prompt": None,
         "action": "examples",
         "tip": "Generate more examples from last response",
+        "modes": ["coding", "writing"],
     },
     {
         "label": "Transfer",
@@ -134,6 +199,7 @@ AI_PROMPTS = [
         "prompt": None,
         "action": "transfer",
         "tip": "Insert last code block into editor",
+        "modes": ["coding", "writing"],
     },
 ]
 
@@ -155,6 +221,7 @@ class SidePanel(QWidget):
     new_tab_with_code_requested = pyqtSignal(str, str)  # code content, language
     context_requested = pyqtSignal(str)  # prompt - emitted when AI prompt needs editor context
     replace_selection_requested = pyqtSignal(str)  # new code - replaces selected text in editor
+    layout_mode_changed = pyqtSignal(str)  # emitted when layout mode changes
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -167,6 +234,7 @@ class SidePanel(QWidget):
         self._code_blocks: list[tuple[str, str]] = []  # [(code, language), ...]
         self._has_selection_to_replace = False  # True when AI response can replace editor selection
         self._manual_model_selection = False  # True when user manually picks a model
+        self._layout_mode = LayoutMode.CODING  # Default to coding mode
         self._setup_ui()
         self._apply_theme()
         self._setup_ai()
@@ -198,24 +266,15 @@ class SidePanel(QWidget):
         self.prompts_toggle.clicked.connect(self._toggle_prompts)
         prompts_layout.addWidget(self.prompts_toggle, alignment=Qt.AlignmentFlag.AlignLeft)
 
-        # Prompts grid (3 columns, flat text chips)
+        # Prompts grid container (3 columns, flat text chips)
         self.prompts_container = QWidget()
-        prompts_grid = QGridLayout(self.prompts_container)
-        prompts_grid.setContentsMargins(0, 4, 0, 0)
-        prompts_grid.setSpacing(2)
+        self._prompts_grid_layout = QGridLayout(self.prompts_container)
+        self._prompts_grid_layout.setContentsMargins(0, 4, 0, 0)
+        self._prompts_grid_layout.setSpacing(2)
 
+        # Build prompts for the current mode
         self.prompt_buttons: list[QPushButton] = []
-        for i, prompt in enumerate(AI_PROMPTS):
-            # Flat text chip: icon + label inline
-            icon = prompt.get("icon", "")
-            label = prompt["label"]
-            btn = QPushButton(f"{icon} {label}")
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setToolTip(prompt.get("tip", ""))
-            btn.clicked.connect(lambda checked, p=prompt: self._on_prompt_click(p))
-            self.prompt_buttons.append(btn)
-            row, col = i // 3, i % 3  # 3 columns
-            prompts_grid.addWidget(btn, row, col)
+        self._rebuild_prompts_grid()
 
         prompts_layout.addWidget(self.prompts_container)
         layout.addWidget(prompts_section)
@@ -329,13 +388,74 @@ class SidePanel(QWidget):
     def _set_context(self, mode: str):
         self.context_mode = mode
 
+    def set_layout_mode(self, mode: LayoutMode):
+        """Set the layout mode and rebuild the prompts grid.
+
+        Args:
+            mode: LayoutMode.CODING or LayoutMode.WRITING
+        """
+        if self._layout_mode != mode:
+            self._layout_mode = mode
+            self._rebuild_prompts_grid()
+            # Switch to default model for this mode (unless user manually selected)
+            if not self._manual_model_selection:
+                self._set_default_model_for_mode(mode)
+            self.layout_mode_changed.emit(mode.value)
+
+    def _set_default_model_for_mode(self, mode: LayoutMode):
+        """Set the default model for the given layout mode."""
+        model_id = DEFAULT_MODE_MODELS.get(mode.value)
+        if model_id:
+            for model in MODELS:
+                if model["id"] == model_id:
+                    self._set_model(model, manual=False)
+                    break
+
+    def get_layout_mode(self) -> LayoutMode:
+        """Get the current layout mode."""
+        return self._layout_mode
+
+    def _rebuild_prompts_grid(self):
+        """Rebuild the prompts grid based on current layout mode."""
+        # Clear existing buttons
+        for btn in self.prompt_buttons:
+            btn.deleteLater()
+        self.prompt_buttons.clear()
+
+        # Clear the grid layout
+        while self._prompts_grid_layout.count():
+            item = self._prompts_grid_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        # Filter prompts for the current mode
+        mode_value = self._layout_mode.value
+        filtered_prompts = [
+            p for p in AI_PROMPTS if mode_value in p.get("modes", ["coding", "writing"])
+        ]
+
+        # Create buttons for filtered prompts
+        for i, prompt in enumerate(filtered_prompts):
+            icon = prompt.get("icon", "")
+            label = prompt["label"]
+            btn = QPushButton(f"{icon} {label}")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setToolTip(prompt.get("tip", ""))
+            btn.clicked.connect(lambda checked, p=prompt: self._on_prompt_click(p))
+            self.prompt_buttons.append(btn)
+            row, col = i // 3, i % 3  # 3 columns
+            self._prompts_grid_layout.addWidget(btn, row, col)
+
+        # Re-apply theme to new buttons
+        self._apply_prompt_button_styles()
+
     def _toggle_prompts(self):
         self.prompts_visible = not self.prompts_visible
         self.prompts_container.setVisible(self.prompts_visible)
         self.prompts_toggle.setText(f"AI Prompts {'▾' if self.prompts_visible else '▸'}")
 
     def _on_prompt_click(self, prompt: dict):
-        # Handle special actions (e.g., Transfer, Examples, Custom)
+        # Handle special actions (e.g., Transfer, Examples, Custom, Translate, Tone)
         action = prompt.get("action")
         if action == "transfer":
             self._transfer_to_editor()
@@ -345,6 +465,12 @@ class SidePanel(QWidget):
             return
         if action == "custom":
             self._show_custom_prompt_dialog()
+            return
+        if action == "translate":
+            self._show_translate_dialog()
+            return
+        if action == "tone":
+            self._show_tone_dialog()
             return
 
         # Auto-route model based on prompt type (unless user manually selected)
@@ -394,8 +520,91 @@ class SidePanel(QWidget):
             # Request context from main window - it will call execute_prompt_with_context
             self.context_requested.emit(prompt)
 
+    def _show_translate_dialog(self):
+        """Show dialog for selecting target language for translation."""
+        languages = [
+            "Spanish",
+            "French",
+            "German",
+            "Italian",
+            "Portuguese",
+            "Chinese",
+            "Japanese",
+            "Korean",
+            "Russian",
+            "Arabic",
+            "Hindi",
+            "Dutch",
+            "Polish",
+            "Swedish",
+            "Other...",
+        ]
+        language, ok = QInputDialog.getItem(
+            self,
+            "Translate",
+            "Select target language:",
+            languages,
+            0,
+            False,
+        )
+        if ok and language:
+            if language == "Other...":
+                language, ok = QInputDialog.getText(
+                    self,
+                    "Translate",
+                    "Enter target language:",
+                    QLineEdit.EchoMode.Normal,
+                    "",
+                )
+                if not ok or not language.strip():
+                    return
+                language = language.strip()
+            prompt = f"Translate this text to {language}. Preserve all line breaks and paragraph structure. Return only the translated text."
+            self.context_requested.emit(prompt)
+
+    def _show_tone_dialog(self):
+        """Show dialog for selecting tone adjustment."""
+        tones = [
+            "Professional",
+            "Casual",
+            "Friendly",
+            "Formal",
+            "Academic",
+            "Persuasive",
+            "Humorous",
+            "Empathetic",
+            "Concise",
+            "Other...",
+        ]
+        tone, ok = QInputDialog.getItem(
+            self,
+            "Adjust Tone",
+            "Select desired tone:",
+            tones,
+            0,
+            False,
+        )
+        if ok and tone:
+            if tone == "Other...":
+                tone, ok = QInputDialog.getText(
+                    self,
+                    "Adjust Tone",
+                    "Describe the desired tone:",
+                    QLineEdit.EchoMode.Normal,
+                    "",
+                )
+                if not ok or not tone.strip():
+                    return
+                tone = tone.strip()
+            prompt = f"Rewrite this text in a {tone.lower()} tone. Preserve line breaks and paragraph structure. Return only the rewritten text."
+            self.context_requested.emit(prompt)
+
     def _transfer_to_editor(self):
-        """Extract code from last AI response and emit signal to insert in editor."""
+        """Extract content from last AI response and emit signal to insert in editor.
+
+        In coding mode: extracts code blocks.
+        In writing mode: uses full response text if no code blocks found.
+        """
         if not self._current_ai_response:
             self.append_message("system", "[No AI response to transfer]")
             return
@@ -404,6 +613,10 @@ class SidePanel(QWidget):
         if code:
             self.transfer_to_editor_requested.emit(code)
             self.append_message("system", "[Code transferred to editor]")
+        elif self._layout_mode == LayoutMode.WRITING:
+            # In writing mode, transfer the full response text
+            self.transfer_to_editor_requested.emit(self._current_ai_response)
+            self.append_message("system", "[Text transferred to editor]")
         else:
             self.append_message("system", "[No code blocks found in response]")
 
@@ -449,6 +662,14 @@ class SidePanel(QWidget):
             action = url_str.split(":")[1]
             if action == "continue":
                 self._continue_generation()
+            elif action == "copy_text":
+                self._handle_text_action("copy")
+            elif action == "insert_text":
+                self._handle_text_action("insert")
+            elif action == "newtab_text":
+                self._handle_text_action("newtab")
+            elif action == "replace_text":
+                self._handle_text_action("replace")
             return
 
         # Handle external URLs (http/https)
@@ -472,6 +693,29 @@ class SidePanel(QWidget):
             self.replace_selection_requested.emit(code)
             self.append_message("system", "[Selection replaced with new code]")
             # Clear the flag after replacement
+            self._has_selection_to_replace = False
+
+    def _handle_text_action(self, action: str):
+        """Handle text action for writing mode responses (copy, insert, newtab, replace)."""
+        if not self._current_ai_response:
+            self.append_message("system", "[No text to transfer]")
+            return
+
+        text = self._current_ai_response
+        if action == "copy":
+            clipboard = QApplication.clipboard()
+            if clipboard:
+                clipboard.setText(text)
+                self.append_message("system", "[Text copied to clipboard]")
+        elif action == "insert":
+            self.transfer_to_editor_requested.emit(text)
+            self.append_message("system", "[Text inserted at cursor]")
+        elif action == "newtab":
+            self.new_tab_with_code_requested.emit(text, "text")
+            self.append_message("system", "[Text opened in new tab]")
+        elif action == "replace":
+            self.replace_selection_requested.emit(text)
+            self.append_message("system", "[Selection replaced with new text]")
             self._has_selection_to_replace = False
 
     def _continue_generation(self):
@@ -552,7 +796,8 @@ class SidePanel(QWidget):
         self.stop_btn.show()
         # Get context based on mode (placeholder - main window will provide actual context)
         context = None
-        self.ai_manager.generate(self.current_model["id"], prompt, context)
+        # Pass layout mode to AI manager for system prompt selection
+        self.ai_manager.generate(self.current_model["id"], prompt, context, self._layout_mode.value)
 
     def _stop_generation(self):
         """Stop the current AI generation."""
@@ -581,6 +826,31 @@ class SidePanel(QWidget):
         # Final update to ensure complete response is shown
         if self._current_ai_response:
             self._update_ai_response(self._current_ai_response)
+
+            # In writing mode, add text action buttons if no code blocks
+            if self._layout_mode == LayoutMode.WRITING and not self._code_blocks:
+                link_style = "color: #7fbf8f; text-decoration: none;"
+                text_actions_html = (
+                    '<p style="margin: 8px 0 5px 0; padding: 6px 10px; '
+                    'background: rgba(0,0,0,0.2); border-radius: 4px;">'
+                    f'<span style="color: rgba(180,210,190,0.5); font-size: 10px;">text</span>'
+                    f"&nbsp;&nbsp;—&nbsp;&nbsp;"
+                    f'<a href="action:copy_text" style="{link_style}; font-size: 10px;">Copy</a>'
+                    f"&nbsp;&nbsp;|&nbsp;&nbsp;"
+                    f'<a href="action:insert_text" style="{link_style}; font-size: 10px;">Insert</a>'
+                    f"&nbsp;&nbsp;|&nbsp;&nbsp;"
+                    f'<a href="action:newtab_text" style="{link_style}; font-size: 10px;">New Tab</a>'
+                )
+                # Add Replace if we have a selection
+                if self._has_selection_to_replace:
+                    text_actions_html += (
+                        f"&nbsp;&nbsp;|&nbsp;&nbsp;"
+                        f'<a href="action:replace_text" style="{link_style}; '
+                        f'font-size: 10px; font-weight: bold;">Replace</a>'
+                    )
+                text_actions_html += "</p>"
+                self.chat_area.append(text_actions_html)
+
             # Add "Continue" link after response
             continue_html = (
                 '<p style="margin: 8px 0 5px 0;">'
@@ -687,6 +957,26 @@ class SidePanel(QWidget):
         """Public method for external theme updates."""
         self._apply_theme()
 
+    def _apply_prompt_button_styles(self):
+        """Apply styles to prompt buttons (called from _apply_theme and _rebuild_prompts_grid)."""
+        text_main = "#8aa898"
+        for btn in self.prompt_buttons:
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: transparent;
+                    border: none;
+                    border-radius: 3px;
+                    color: rgba(127, 191, 181, 0.6);
+                    font-size: 11px;
+                    padding: 6px 4px;
+                    text-align: left;
+                }}
+                QPushButton:hover {{
+                    background: rgba(180,210,190,0.08);
+                    color: {text_main};
+                }}
+            """)
+
     def _apply_theme(self):
         """Apply Metropolis Art Deco theme."""
         bg = "#1a2a2a"
@@ -731,22 +1021,7 @@ class SidePanel(QWidget):
         """)
 
         # Prompt chips (flat text, no borders)
-        for btn in self.prompt_buttons:
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: transparent;
-                    border: none;
-                    border-radius: 3px;
-                    color: rgba(127, 191, 181, 0.6);
-                    font-size: 11px;
-                    padding: 6px 4px;
-                    text-align: left;
-                }}
-                QPushButton:hover {{
-                    background: rgba(180,210,190,0.08);
-                    color: {text_main};
-                }}
-            """)
+        self._apply_prompt_button_styles()
 
         # Model button
         self.model_btn.setStyleSheet(f"""

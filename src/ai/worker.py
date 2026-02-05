@@ -23,13 +23,24 @@ class AIWorker(QObject):
         self._model = "llama3.1"
         self._prompt = ""
         self._context = None
+        self._mode = "coding"
         self._cancelled = False
 
-    def set_request(self, model: str, prompt: str, context: str | None = None):
-        """Set the request parameters before starting."""
+    def set_request(
+        self, model: str, prompt: str, context: str | None = None, mode: str = "coding"
+    ):
+        """Set the request parameters before starting.
+
+        Args:
+            model: Ollama model name
+            prompt: User prompt
+            context: Optional context (code selection, file content)
+            mode: Layout mode ("coding" or "writing")
+        """
         self._model = model
         self._prompt = prompt
         self._context = context
+        self._mode = mode
         self._cancelled = False
 
     def cancel(self):
@@ -53,6 +64,7 @@ class AIWorker(QObject):
                 model=self._model,
                 prompt=self._prompt,
                 context=self._context,
+                mode=self._mode,
             ):
                 if self._cancelled:
                     break
@@ -85,7 +97,7 @@ class AIManager(QObject):
         self._thread: QThread | None = None
         self._worker: AIWorker | None = None
 
-    def generate(self, model: str, prompt: str, context: str | None = None):
+    def generate(self, model: str, prompt: str, context: str | None = None, mode: str = "coding"):
         """
         Start an AI generation request.
 
@@ -93,6 +105,7 @@ class AIManager(QObject):
             model: Ollama model name
             prompt: User prompt
             context: Optional context (code selection, file content)
+            mode: Layout mode ("coding" or "writing")
         """
         # Stop any existing generation
         self.stop()
@@ -103,7 +116,7 @@ class AIManager(QObject):
         self._worker.moveToThread(self._thread)
 
         # Set request parameters
-        self._worker.set_request(model, prompt, context)
+        self._worker.set_request(model, prompt, context, mode)
 
         # Connect signals
         self._worker.token_received.connect(self.token_received.emit)

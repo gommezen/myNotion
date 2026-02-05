@@ -43,7 +43,7 @@ from ui.editor_tab import EditorTab
 from ui.file_browser import FileBrowserPanel
 from ui.find_replace import FindReplaceBar
 from ui.settings_dialog import SettingsDialog
-from ui.side_panel import SidePanel
+from ui.side_panel import LayoutMode, SidePanel
 from ui.toolbar_widgets import FormattingToolbar
 
 
@@ -565,6 +565,38 @@ class MainWindow(QMainWindow):
 
         view_menu.addSeparator()
 
+        # Layout Mode submenu
+        self.layout_mode_menu = view_menu.addMenu(self.tr("Layout Mode"))
+        self.layout_mode_actions = QActionGroup(self)
+        self.layout_mode_actions.setExclusive(True)
+
+        # Coding Mode action
+        self.coding_mode_action = QAction(self.tr("Coding Mode"), self)
+        self.coding_mode_action.setCheckable(True)
+        self.coding_mode_action.setData(LayoutMode.CODING)
+        self.coding_mode_action.triggered.connect(self._on_layout_mode_selected)
+        self.layout_mode_actions.addAction(self.coding_mode_action)
+        self.layout_mode_menu.addAction(self.coding_mode_action)
+
+        # Writing Mode action
+        self.writing_mode_action = QAction(self.tr("Writing Mode"), self)
+        self.writing_mode_action.setCheckable(True)
+        self.writing_mode_action.setData(LayoutMode.WRITING)
+        self.writing_mode_action.triggered.connect(self._on_layout_mode_selected)
+        self.layout_mode_actions.addAction(self.writing_mode_action)
+        self.layout_mode_menu.addAction(self.writing_mode_action)
+
+        # Toggle shortcut (Ctrl+Shift+M to toggle between modes)
+        self.toggle_layout_mode_action = QAction(self.tr("Toggle Layout Mode"), self)
+        self.toggle_layout_mode_action.setShortcut(QKeySequence("Ctrl+Shift+M"))
+        self.toggle_layout_mode_action.triggered.connect(self._toggle_layout_mode)
+        self.addAction(self.toggle_layout_mode_action)  # Add to window for shortcut to work
+
+        # Load saved mode and apply
+        self._load_layout_mode()
+
+        view_menu.addSeparator()
+
         # Side panel toggle
         self.toggle_panel_action = QAction(self.tr("Side Panel"), self)
         self.toggle_panel_action.setCheckable(True)
@@ -820,6 +852,44 @@ class MainWindow(QMainWindow):
             language = action.data()
             editor.set_language(language)
             self._update_language_indicator(language)
+
+    def _load_layout_mode(self):
+        """Load saved layout mode and apply to side panel."""
+        saved_mode = self.settings_manager.get_layout_mode()
+        mode = LayoutMode.WRITING if saved_mode == "writing" else LayoutMode.CODING
+
+        # Update menu checkmarks
+        if mode == LayoutMode.CODING:
+            self.coding_mode_action.setChecked(True)
+        else:
+            self.writing_mode_action.setChecked(True)
+
+        # Apply to side panel
+        self.side_panel.set_layout_mode(mode)
+
+    def _on_layout_mode_selected(self):
+        """Handle layout mode selection from menu."""
+        action = self.layout_mode_actions.checkedAction()
+        if action:
+            mode = action.data()
+            self._apply_layout_mode(mode)
+
+    def _toggle_layout_mode(self):
+        """Toggle between Coding and Writing modes."""
+        current_mode = self.side_panel.get_layout_mode()
+        new_mode = LayoutMode.WRITING if current_mode == LayoutMode.CODING else LayoutMode.CODING
+        self._apply_layout_mode(new_mode)
+
+        # Update menu checkmarks
+        if new_mode == LayoutMode.CODING:
+            self.coding_mode_action.setChecked(True)
+        else:
+            self.writing_mode_action.setChecked(True)
+
+    def _apply_layout_mode(self, mode: LayoutMode):
+        """Apply layout mode to settings and side panel."""
+        self.settings_manager.set_layout_mode(mode.value)
+        self.side_panel.set_layout_mode(mode)
 
     def _update_recent_menu(self):
         """Update the recent files menu."""

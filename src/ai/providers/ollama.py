@@ -12,12 +12,23 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_HOST = "http://localhost:11434"
 
-# System prompt for concise, well-formatted responses
-DEFAULT_SYSTEM_PROMPT = """You are a concise coding assistant. Rules:
+# System prompt for coding mode - concise, well-formatted code responses
+CODING_SYSTEM_PROMPT = """You are a concise coding assistant. Rules:
 - Wrap code in markdown blocks with language (```python)
 - Be brief: 1-2 sentences before code, key points only after
 - Code comments for non-obvious parts only
 - Skip obvious explanations, focus on what matters"""
+
+# System prompt for writing mode - prose-focused responses
+WRITING_SYSTEM_PROMPT = """You are a concise writing assistant. Rules:
+- Return ONLY the requested text, no explanations or preamble
+- Follow length instructions strictly (if asked to shorten, make it shorter)
+- Focus on clarity, grammar, and effective communication
+- Maintain the author's voice when editing
+- Never add unnecessary content or padding"""
+
+# Alias for backwards compatibility
+DEFAULT_SYSTEM_PROMPT = CODING_SYSTEM_PROMPT
 
 
 class OllamaClient:
@@ -46,6 +57,7 @@ class OllamaClient:
         prompt: str,
         context: str | None = None,
         system: str | None = None,
+        mode: str = "coding",
     ) -> AsyncIterator[str]:
         """
         Generate a response from Ollama, streaming tokens.
@@ -54,7 +66,8 @@ class OllamaClient:
             model: Model name (e.g., "llama3.1", "glm-4.7-flash:latest")
             prompt: User prompt
             context: Optional context (selected code, file content, etc.)
-            system: Optional system prompt
+            system: Optional system prompt (overrides mode-based prompt)
+            mode: Layout mode ("coding" or "writing") for selecting system prompt
 
         Yields:
             Response tokens as they arrive
@@ -66,11 +79,19 @@ class OllamaClient:
         if context:
             full_prompt = f"Context:\n```\n{context}\n```\n\nUser request: {prompt}"
 
+        # Select system prompt based on mode (unless explicitly provided)
+        if system:
+            selected_system = system
+        elif mode == "writing":
+            selected_system = WRITING_SYSTEM_PROMPT
+        else:
+            selected_system = CODING_SYSTEM_PROMPT
+
         payload = {
             "model": model,
             "prompt": full_prompt,
             "stream": True,
-            "system": system or DEFAULT_SYSTEM_PROMPT,
+            "system": selected_system,
         }
 
         try:
