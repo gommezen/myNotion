@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
     QStatusBar,
     QTabWidget,
     QToolButton,
+    QVBoxLayout,
     QWidget,
     QWidgetAction,
 )
@@ -40,6 +41,7 @@ from ui.activity_bar import ActivityBar
 from ui.custom_tab_bar import CustomTabBar
 from ui.editor_tab import EditorTab
 from ui.file_browser import FileBrowserPanel
+from ui.find_replace import FindReplaceBar
 from ui.settings_dialog import SettingsDialog
 from ui.side_panel import SidePanel
 from ui.toolbar_widgets import FormattingToolbar
@@ -183,6 +185,32 @@ class MainWindow(QMainWindow):
                 color: #c8e0ce;
                 background-color: {chrome_hover};
             }}
+            QMessageBox {{
+                background-color: {bg};
+                color: {fg};
+            }}
+            QMessageBox QLabel {{
+                color: {fg};
+                font-size: 11px;
+            }}
+            QMessageBox QPushButton {{
+                background-color: {chrome_bg};
+                color: {fg};
+                border: 1px solid {chrome_border};
+                border-radius: 3px;
+                padding: 6px 16px;
+                min-width: 70px;
+                font-size: 11px;
+            }}
+            QMessageBox QPushButton:hover {{
+                background-color: {chrome_hover};
+            }}
+            QMessageBox QPushButton:pressed {{
+                background-color: {selection};
+            }}
+            QMessageBox QPushButton:default {{
+                border: 1px solid #d4a84b;
+            }}
         """)
 
     def _setup_ui(self):
@@ -194,6 +222,18 @@ class MainWindow(QMainWindow):
         icon_path = Path(__file__).parent.parent.parent / "resources" / "mynotion.ico"
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
+
+        # Central container with find bar and tab widget
+        central_container = QWidget(self)
+        central_layout = QVBoxLayout(central_container)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setSpacing(0)
+
+        # Find/Replace bar (hidden by default)
+        self.find_bar = FindReplaceBar(self)
+        self.find_bar.hide()
+        self.find_bar.closed.connect(self._on_find_bar_closed)
+        central_layout.addWidget(self.find_bar)
 
         # Tab widget for multiple documents
         self.tab_widget = QTabWidget(self)
@@ -207,7 +247,9 @@ class MainWindow(QMainWindow):
         self.tab_widget.setTabsClosable(False)  # We handle close buttons ourselves
         self.tab_widget.setMovable(True)
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
-        self.setCentralWidget(self.tab_widget)
+        central_layout.addWidget(self.tab_widget)
+
+        self.setCentralWidget(central_container)
 
         # Create + button on the tab widget (not tab bar) so it's always visible
         self.new_tab_btn = QToolButton(self.tab_widget)
@@ -480,6 +522,18 @@ class MainWindow(QMainWindow):
         paste_action.triggered.connect(self._paste)
         edit_menu.addAction(paste_action)
 
+        edit_menu.addSeparator()
+
+        find_action = QAction(self.tr("Find..."), self)
+        find_action.setShortcut(QKeySequence.StandardKey.Find)
+        find_action.triggered.connect(self._show_find_bar)
+        edit_menu.addAction(find_action)
+
+        replace_action = QAction(self.tr("Replace..."), self)
+        replace_action.setShortcut(QKeySequence.StandardKey.Replace)
+        replace_action.triggered.connect(self._show_find_bar)
+        edit_menu.addAction(replace_action)
+
         # View menu
         view_menu = menubar.addMenu(self.tr("&View"))
 
@@ -633,8 +687,44 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Save geometry and handle unsaved changes on close."""
+        # Check for unsaved changes in all tabs
+        unsaved_tabs = []
+        for i in range(self.tab_widget.count()):
+            editor = self.tab_widget.widget(i)
+            if self._has_unsaved_changes(editor):
+                tab_name = self.tab_widget.tabText(i).rstrip("*")
+                unsaved_tabs.append((i, tab_name, editor))
+
+        if unsaved_tabs:
+            # Build list of unsaved file names
+            names = "\n".join(f"  • {name}" for _, name, _ in unsaved_tabs)
+            result = QMessageBox.warning(
+                self,
+                self.tr("Unsaved Changes"),
+                self.tr(f"You have unsaved changes in:\n\n{names}\n\nSave before closing?"),
+                QMessageBox.StandardButton.SaveAll
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.SaveAll,
+            )
+
+            if result == QMessageBox.StandardButton.SaveAll:
+                # Save all unsaved tabs
+                for i, _, editor in unsaved_tabs:
+                    if editor.filepath:
+                        editor.save_file()
+                    else:
+                        self.tab_widget.setCurrentIndex(i)
+                        self.save_file_as()
+                        if editor.document().isModified():
+                            event.ignore()  # Save was cancelled
+                            return
+            elif result == QMessageBox.StandardButton.Cancel:
+                event.ignore()
+                return
+            # Discard: just continue closing
+
         self.settings.setValue("geometry", self.saveGeometry())
-        # TODO: Check for unsaved changes in all tabs
         event.accept()
 
     def _on_tab_changed(self, index: int):
@@ -643,6 +733,8 @@ class MainWindow(QMainWindow):
         if editor:
             self._update_language_indicator(editor.language)
             self._connect_editor_signals(editor)
+            # Update find bar's editor reference
+            self.find_bar.set_editor(editor)
             # Apply fade-in transition
             self._animate_tab_transition(editor)
 
@@ -790,14 +882,66 @@ class MainWindow(QMainWindow):
         index = self.tab_widget.addTab(editor, self.tr("Untitled"))
         self.tab_widget.setCurrentIndex(index)
         self._connect_editor_signals(editor)
+        # Track document modifications for unsaved indicator
+        editor.document().modificationChanged.connect(
+            lambda modified: self._on_document_modified(editor, modified)
+        )
         return editor
+
+    def _on_document_modified(self, editor: EditorTab, modified: bool):
+        """Update tab title to show unsaved indicator."""
+        index = self.tab_widget.indexOf(editor)
+        if index == -1:
+            return
+
+        current_title = self.tab_widget.tabText(index)
+        if modified and not current_title.endswith("*"):
+            self.tab_widget.setTabText(index, current_title + "*")
+        elif not modified and current_title.endswith("*"):
+            self.tab_widget.setTabText(index, current_title[:-1])
+
+    def _has_unsaved_changes(self, editor: EditorTab) -> bool:
+        """Check if an editor has unsaved changes."""
+        return editor.document().isModified()
+
+    def _prompt_save_changes(self, editor: EditorTab, tab_name: str) -> bool:
+        """Prompt user to save changes. Returns True if okay to close."""
+        result = QMessageBox.warning(
+            self,
+            self.tr("Unsaved Changes"),
+            self.tr(f"'{tab_name}' has unsaved changes.\n\nDo you want to save before closing?"),
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Save,
+        )
+
+        if result == QMessageBox.StandardButton.Save:
+            # Save the file
+            if editor.filepath:
+                editor.save_file()
+            else:
+                # No filepath, need Save As
+                index = self.tab_widget.indexOf(editor)
+                self.tab_widget.setCurrentIndex(index)
+                self.save_file_as()
+            return not editor.document().isModified()  # Check if save succeeded
+
+        # Discard returns True (ok to close), Cancel returns False
+        return result == QMessageBox.StandardButton.Discard
 
     def close_tab(self, index: int):
         """Close the tab at the given index."""
-        # TODO: Check for unsaved changes
-        widget = self.tab_widget.widget(index)
+        editor = self.tab_widget.widget(index)
+
+        # Check for unsaved changes
+        if self._has_unsaved_changes(editor):
+            tab_name = self.tab_widget.tabText(index).rstrip("*")
+            if not self._prompt_save_changes(editor, tab_name):
+                return  # User cancelled
+
         self.tab_widget.removeTab(index)
-        widget.deleteLater()
+        editor.deleteLater()
 
         # Create new tab if all tabs closed
         if self.tab_widget.count() == 0:
@@ -870,6 +1014,19 @@ class MainWindow(QMainWindow):
     def _paste(self):
         if editor := self.current_editor():
             editor.paste()
+
+    def _show_find_bar(self):
+        """Show the find/replace bar."""
+        editor = self.current_editor()
+        if editor:
+            self.find_bar.set_editor(editor)
+            self.find_bar.show_bar()
+
+    def _on_find_bar_closed(self):
+        """Handle find bar closed."""
+        # Return focus to editor
+        if editor := self.current_editor():
+            editor.setFocus()
 
     # View operations
     def _zoom_in(self):

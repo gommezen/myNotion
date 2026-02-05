@@ -296,6 +296,9 @@ class EditorTab(QPlainTextEdit):
             with open(filepath) as f:
                 self.setPlainText(f.read())
 
+        # Mark as unmodified after loading
+        self.document().setModified(False)
+
     def save_file(self, filepath: str | None = None):
         """Save content to a file."""
         if filepath:
@@ -307,6 +310,8 @@ class EditorTab(QPlainTextEdit):
         if self.filepath:
             with open(self.filepath, "w", encoding="utf-8") as f:
                 f.write(self.toPlainText())
+            # Mark document as unmodified after successful save
+            self.document().setModified(False)
 
     def set_language(self, language: Language):
         """Manually set the syntax highlighting language."""

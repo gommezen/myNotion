@@ -4,8 +4,6 @@
 MyNotion a lightweight text and code editor with AI integration. Think notepad but with syntax highlighting, multiple themes, and local AI assistance via Ollama.
 
 
-![MyNotion Screenshot](docs/screenshot.png) 
-
 ## Features
 
 - **Multi-tab editing** — Open and edit multiple files simultaneously
@@ -22,8 +20,7 @@ MyNotion a lightweight text and code editor with AI integration. Think notepad b
   - Streaming responses with code block formatting
 
 ## Screenshots
-
-*Coming soon*
+![MyNotion Screenshot](docs/screenshot.png) 
 
 ## Installation
 

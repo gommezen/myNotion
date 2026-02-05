@@ -35,6 +35,22 @@ MODELS = [
     {"id": "llama3.1:8b-instruct-q8_0", "name": "Llama 3.1", "tag": "8B Q8"},
 ]
 
+# ─── Auto-Model Routing ───
+# Maps prompt labels to preferred models for automatic selection
+# Edit model_id values to match your installed Ollama models
+MODEL_ROUTING = {
+    # Quick tasks → lightweight model (fast responses)
+    "quick": {
+        "model_id": "llama3.2:latest",
+        "prompts": ["Explain", "Docstring", "Simplify", "Summarize", "Examples", "Transfer"],
+    },
+    # Deep review → heavier model (thorough analysis)
+    "deep": {
+        "model_id": "qwen2.5:7b-instruct-q4_0",
+        "prompts": ["Debug", "Fix", "Improve", "Refactor", "Test", "Translate"],
+    },
+}
+
 # AI prompts with icons (card-style layout)
 # Special actions: "transfer", "examples", "custom" have action handlers instead of prompts
 AI_PROMPTS = [
@@ -150,6 +166,7 @@ class SidePanel(QWidget):
         self._chat_html_before_response = ""  # HTML state before AI response
         self._code_blocks: list[tuple[str, str]] = []  # [(code, language), ...]
         self._has_selection_to_replace = False  # True when AI response can replace editor selection
+        self._manual_model_selection = False  # True when user manually picks a model
         self._setup_ui()
         self._apply_theme()
         self._setup_ai()
@@ -291,9 +308,23 @@ class SidePanel(QWidget):
                 }
             """)
 
-    def _set_model(self, model: dict):
+    def _set_model(self, model: dict, manual: bool = True):
+        """Set the current model. manual=True when user explicitly selects."""
         self.current_model = model
+        if manual:
+            self._manual_model_selection = True
         self._update_model_button()
+
+    def _get_routed_model(self, prompt_label: str) -> dict | None:
+        """Get the auto-routed model for a prompt label, or None if not found."""
+        for category in MODEL_ROUTING.values():
+            if prompt_label in category["prompts"]:
+                model_id = category["model_id"]
+                # Find the model dict by ID
+                for model in MODELS:
+                    if model["id"] == model_id:
+                        return model
+        return None
 
     def _set_context(self, mode: str):
         self.context_mode = mode
@@ -315,6 +346,12 @@ class SidePanel(QWidget):
         if action == "custom":
             self._show_custom_prompt_dialog()
             return
+
+        # Auto-route model based on prompt type (unless user manually selected)
+        if not self._manual_model_selection:
+            routed_model = self._get_routed_model(prompt["label"])
+            if routed_model:
+                self._set_model(routed_model, manual=False)
 
         # Request context from main window - it will call execute_prompt_with_context
         self.context_requested.emit(prompt["prompt"])
