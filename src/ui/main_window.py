@@ -363,6 +363,7 @@ class MainWindow(QMainWindow):
         self.side_panel.transfer_to_editor_requested.connect(self._insert_code_to_editor)
         self.side_panel.new_tab_with_code_requested.connect(self._new_tab_with_code)
         self.side_panel.context_requested.connect(self._on_context_requested)
+        self.side_panel.chat_context_requested.connect(self._on_chat_context_requested)
         self.side_panel.replace_selection_requested.connect(self._replace_selection)
 
         # Connect file browser signals
@@ -402,6 +403,21 @@ class MainWindow(QMainWindow):
                 context = editor.toPlainText()
 
         self.side_panel.execute_prompt_with_context(prompt, context, is_selection)
+
+    def _on_chat_context_requested(self, message: str):
+        """Handle chat message that needs editor context.
+
+        Gets full file content from the current editor and passes it
+        to the side panel along with the user's message.
+        """
+        context = None
+        editor = self.current_editor()
+
+        if editor:
+            # For chat, always use full file content as context
+            context = editor.toPlainText()
+
+        self.side_panel.execute_chat_with_context(message, context)
 
     def _replace_selection(self, new_code: str):
         """Replace the current selection in the editor with new code.

@@ -220,6 +220,7 @@ class SidePanel(QWidget):
     transfer_to_editor_requested = pyqtSignal(str)  # code content
     new_tab_with_code_requested = pyqtSignal(str, str)  # code content, language
     context_requested = pyqtSignal(str)  # prompt - emitted when AI prompt needs editor context
+    chat_context_requested = pyqtSignal(str)  # message - emitted when chat needs editor context
     replace_selection_requested = pyqtSignal(str)  # new code - replaces selected text in editor
     layout_mode_changed = pyqtSignal(str)  # emitted when layout mode changes
 
@@ -299,6 +300,19 @@ class SidePanel(QWidget):
             action.triggered.connect(lambda checked, m=model: self._set_model(m))
         self.model_btn.setMenu(model_menu)
         model_row.addWidget(self.model_btn)
+
+        # Context toggle button - include/exclude active tab content
+        self._include_context = True  # Default: include context
+        self.context_toggle_btn = QPushButton("📄 Active Tab")
+        self.context_toggle_btn.setCheckable(True)
+        self.context_toggle_btn.setChecked(True)
+        self.context_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.context_toggle_btn.setToolTip(
+            "Include active tab content as context (click to toggle)"
+        )
+        self.context_toggle_btn.clicked.connect(self._toggle_context_inclusion)
+        model_row.addWidget(self.context_toggle_btn)
+
         model_row.addStretch()
 
         input_layout.addLayout(model_row)
@@ -758,13 +772,46 @@ class SidePanel(QWidget):
 
         self._start_ai_generation(full_prompt)
 
+    def _toggle_context_inclusion(self):
+        """Toggle whether to include active tab content as context."""
+        self._include_context = self.context_toggle_btn.isChecked()
+        if self._include_context:
+            self.context_toggle_btn.setText("📄 Active Tab")
+            self.context_toggle_btn.setToolTip("Including active tab as context (click to exclude)")
+        else:
+            self.context_toggle_btn.setText("○ No Context")
+            self.context_toggle_btn.setToolTip("Not including active tab (click to include)")
+        self._apply_context_toggle_style()
+
     def _send_message(self):
         text = self.input_field.text().strip()
         if text:
             self.append_message("user", text)
             self.message_sent.emit(text, self.current_model["id"], self.context_mode)
             self.input_field.clear()
-            self._start_ai_generation(text)
+            # Request context from editor if toggle is enabled
+            if self._include_context:
+                self.chat_context_requested.emit(text)
+            else:
+                # Send without context
+                self._start_ai_generation(text)
+
+    def execute_chat_with_context(self, message: str, context: str | None):
+        """Execute a chat message with editor context.
+
+        Called by main window after chat_context_requested signal is emitted.
+
+        Args:
+            message: The user's chat message
+            context: Text content from the active editor, or None
+        """
+        if context:
+            # Include editor content as context
+            full_prompt = f"The user is working on this text:\n\n```\n{context}\n```\n\nUser question: {message}"
+        else:
+            full_prompt = message
+
+        self._start_ai_generation(full_prompt)
 
     def append_message(self, role: str, text: str):
         if role == "user":
@@ -977,6 +1024,40 @@ class SidePanel(QWidget):
                 }}
             """)
 
+    def _apply_context_toggle_style(self):
+        """Apply styles to the context toggle button based on its state."""
+        if self._include_context:
+            # Active state - show as enabled with accent color
+            self.context_toggle_btn.setStyleSheet("""
+                QPushButton {
+                    background: rgba(127, 191, 143, 0.15);
+                    border: 1px solid rgba(127, 191, 143, 0.3);
+                    border-radius: 3px;
+                    color: #7fbf8f;
+                    font-size: 10px;
+                    padding: 2px 8px;
+                }
+                QPushButton:hover {
+                    background: rgba(127, 191, 143, 0.25);
+                }
+            """)
+        else:
+            # Inactive state - dimmed
+            self.context_toggle_btn.setStyleSheet("""
+                QPushButton {
+                    background: transparent;
+                    border: 1px solid rgba(180,210,190,0.15);
+                    border-radius: 3px;
+                    color: rgba(180,210,190,0.4);
+                    font-size: 10px;
+                    padding: 2px 8px;
+                }
+                QPushButton:hover {
+                    background: rgba(180,210,190,0.08);
+                    color: rgba(180,210,190,0.6);
+                }
+            """)
+
     def _apply_theme(self):
         """Apply Metropolis Art Deco theme."""
         bg = "#1a2a2a"
@@ -1065,6 +1146,9 @@ class SidePanel(QWidget):
         """
         if self.model_btn.menu():
             self.model_btn.menu().setStyleSheet(menu_style)
+
+        # Context toggle button
+        self._apply_context_toggle_style()
 
         # Input row background (transparent border reserves space for focus border)
         self.input_row_widget.setStyleSheet("""
