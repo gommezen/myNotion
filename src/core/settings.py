@@ -232,3 +232,12 @@ class SettingsManager:
         """Set the layout mode (coding or writing)."""
         if mode in ("coding", "writing"):
             self.settings.setValue("layout_mode", mode)
+
+    # API Keys
+    def get_anthropic_api_key(self) -> str:
+        """Get the Anthropic API key for Haiku/Claude models."""
+        return self.settings.value("anthropic_api_key", "")
+
+    def set_anthropic_api_key(self, key: str):
+        """Set the Anthropic API key."""
+        self.settings.setValue("anthropic_api_key", key)

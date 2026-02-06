@@ -1,16 +1,18 @@
 """
-AI Worker for running Ollama requests in background thread.
+AI Worker for running AI requests in background thread.
+Supports Ollama (local) and Anthropic (cloud) providers.
 """
 
 import asyncio
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
+from ai.providers.anthropic import AnthropicClient
 from ai.providers.ollama import OllamaClient
 
 
 class AIWorker(QObject):
-    """Worker that runs Ollama requests and emits results via signals."""
+    """Worker that runs AI requests and emits results via signals."""
 
     # Signals for streaming response
     token_received = pyqtSignal(str)  # Individual token
@@ -19,7 +21,8 @@ class AIWorker(QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.client = OllamaClient()
+        self.ollama_client = OllamaClient()
+        self.anthropic_client = AnthropicClient()
         self._model = "llama3.1"
         self._prompt = ""
         self._context = None
@@ -57,11 +60,25 @@ class AIWorker(QObject):
             if not self._cancelled:
                 self.generation_error.emit(str(e))
 
+    def _is_anthropic_model(self, model: str) -> bool:
+        """Check if the model is an Anthropic/Claude model."""
+        return "claude" in model.lower() or "haiku" in model.lower()
+
     async def _async_generate(self):
         """Async generation with streaming."""
         try:
-            async for token in self.client.generate(
-                model=self._model,
+            # Choose provider based on model
+            if self._is_anthropic_model(self._model):
+                # Use Anthropic API - map model ID to actual API model
+                api_model = "claude-3-haiku-20240307"  # Default to Haiku
+                client = self.anthropic_client
+            else:
+                # Use Ollama for local models
+                api_model = self._model
+                client = self.ollama_client
+
+            async for token in client.generate(
+                model=api_model,
                 prompt=self._prompt,
                 context=self._context,
                 mode=self._mode,

@@ -11,11 +11,13 @@ from PyQt6.QtCore import QEvent, Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QApplication,
+    QFileDialog,
     QGridLayout,
     QHBoxLayout,
     QInputDialog,
     QLineEdit,
     QMenu,
+    QPlainTextEdit,
     QPushButton,
     QTextBrowser,
     QToolButton,
@@ -42,6 +44,7 @@ MODELS = [
     {"id": "mistral:7b-instruct-q4_0", "name": "Mistral", "tag": "7B"},
     {"id": "llama3.1:8b-instruct-q4_0", "name": "Llama 3.1", "tag": "8B Q4"},
     {"id": "llama3.1:8b-instruct-q8_0", "name": "Llama 3.1", "tag": "8B Q8"},
+    {"id": "claude-haiku", "name": "Claude 3", "tag": "Haiku", "provider": "anthropic"},
 ]
 
 # ─── Default Models by Mode ───
@@ -301,40 +304,47 @@ class SidePanel(QWidget):
         self.model_btn.setMenu(model_menu)
         model_row.addWidget(self.model_btn)
 
-        # Context toggle button - include/exclude active tab content
-        self._include_context = True  # Default: include context
-        self.context_toggle_btn = QPushButton("📄 Active Tab")
-        self.context_toggle_btn.setCheckable(True)
-        self.context_toggle_btn.setChecked(True)
-        self.context_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.context_toggle_btn.setToolTip(
-            "Include active tab content as context (click to toggle)"
-        )
-        self.context_toggle_btn.clicked.connect(self._toggle_context_inclusion)
-        model_row.addWidget(self.context_toggle_btn)
-
         model_row.addStretch()
+
+        # Context inclusion state (used by options menu)
+        self._include_context = True  # Default: include context
+        self._research_mode = False  # When enabled, uses Haiku for research
 
         input_layout.addLayout(model_row)
 
-        # Input row with background
+        # Input container with text area and buttons (matches design mockup)
         input_row_widget = QWidget()
-        input_row = QHBoxLayout(input_row_widget)
-        input_row.setContentsMargins(8, 6, 8, 6)
-        input_row.setSpacing(6)
+        input_container = QVBoxLayout(input_row_widget)
+        input_container.setContentsMargins(10, 8, 10, 8)
+        input_container.setSpacing(4)
 
-        self.input_field = QLineEdit()
+        # Multi-line text input area
+        self.input_field = QPlainTextEdit()
         self.input_field.setPlaceholderText("Ask anything...")
-        self.input_field.returnPressed.connect(self._send_message)
-        # Track focus for gold border effect
+        self.input_field.setFixedHeight(50)  # Room for ~2 lines
         self.input_field.installEventFilter(self)
-        input_row.addWidget(self.input_field)
+        input_container.addWidget(self.input_field)
+
+        # Bottom row: + button on left, send/stop on right
+        button_row = QHBoxLayout()
+        button_row.setContentsMargins(0, 0, 0, 0)
+        button_row.setSpacing(6)
+
+        # Options button with popup menu (+ button)
+        self.options_btn = QPushButton("+")
+        self.options_btn.setFixedSize(24, 24)
+        self.options_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.options_btn.setToolTip("Options")
+        self.options_btn.clicked.connect(self._show_options_menu)
+        button_row.addWidget(self.options_btn)
+
+        button_row.addStretch()  # Push send button to right
 
         self.send_btn = QPushButton("▶")
         self.send_btn.setFixedSize(24, 24)
         self.send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.send_btn.clicked.connect(self._send_message)
-        input_row.addWidget(self.send_btn)
+        button_row.addWidget(self.send_btn)
 
         # Stop button (hidden by default, shown during generation)
         self.stop_btn = QPushButton("■")
@@ -343,8 +353,9 @@ class SidePanel(QWidget):
         self.stop_btn.setToolTip("Stop generating")
         self.stop_btn.clicked.connect(self._stop_generation)
         self.stop_btn.hide()
-        input_row.addWidget(self.stop_btn)
+        button_row.addWidget(self.stop_btn)
 
+        input_container.addLayout(button_row)
         input_layout.addWidget(input_row_widget)
         self.input_row_widget = input_row_widget  # Store for styling
         layout.addWidget(input_section)
@@ -363,21 +374,21 @@ class SidePanel(QWidget):
         return super().eventFilter(obj, event)
 
     def _set_input_focus_border(self, focused: bool):
-        """Update input row border based on focus state."""
+        """Update input container border based on focus state."""
         if focused:
             self.input_row_widget.setStyleSheet("""
                 QWidget {
-                    background: rgba(180,210,190,0.04);
+                    background: rgba(180,210,190,0.02);
                     border: 1px solid #d4a84b;
-                    border-radius: 3px;
+                    border-radius: 8px;
                 }
             """)
         else:
             self.input_row_widget.setStyleSheet("""
                 QWidget {
-                    background: rgba(180,210,190,0.04);
-                    border: 1px solid transparent;
-                    border-radius: 3px;
+                    background: rgba(180,210,190,0.02);
+                    border: 1px solid rgba(180,210,190,0.25);
+                    border-radius: 8px;
                 }
             """)
 
@@ -772,19 +783,82 @@ class SidePanel(QWidget):
 
         self._start_ai_generation(full_prompt)
 
-    def _toggle_context_inclusion(self):
-        """Toggle whether to include active tab content as context."""
-        self._include_context = self.context_toggle_btn.isChecked()
+    def _show_options_menu(self):
+        """Show the options popup menu above the + button."""
+        menu = QMenu(self)
+        menu.setStyleSheet(self._get_options_menu_style())
+
+        # Active Tab toggle - use bullet for active state
         if self._include_context:
-            self.context_toggle_btn.setText("📄 Active Tab")
-            self.context_toggle_btn.setToolTip("Including active tab as context (click to exclude)")
+            context_action = menu.addAction("● 📄 Active Tab")
         else:
-            self.context_toggle_btn.setText("○ No Context")
-            self.context_toggle_btn.setToolTip("Not including active tab (click to include)")
-        self._apply_context_toggle_style()
+            context_action = menu.addAction("○ 📄 Active Tab")
+        context_action.triggered.connect(
+            lambda: self._toggle_context_inclusion(not self._include_context)
+        )
+
+        # Add to project submenu
+        project_menu = menu.addMenu("○ 📁 Add to project")
+        project_menu.setStyleSheet(self._get_options_menu_style())
+        active_tab_action = project_menu.addAction("Active tab only")
+        active_tab_action.triggered.connect(lambda: self._add_to_project_folder("active"))
+        all_tabs_action = project_menu.addAction("All open tabs")
+        all_tabs_action.triggered.connect(lambda: self._add_to_project_folder("all"))
+
+        menu.addSeparator()
+
+        # Research option - switches to Haiku model
+        if self._research_mode:
+            research_action = menu.addAction("● 🔍 Research")
+        else:
+            research_action = menu.addAction("○ 🔍 Research")
+        research_action.triggered.connect(self._toggle_research_mode)
+
+        # Show menu above the button
+        pos = self.options_btn.mapToGlobal(self.options_btn.rect().topLeft())
+        menu_height = menu.sizeHint().height()
+        pos.setY(pos.y() - menu_height)
+        menu.popup(pos)
+
+    def _toggle_context_inclusion(self, checked: bool):
+        """Toggle whether to include active tab content as context."""
+        self._include_context = checked
+        # Update the options button to indicate context state
+        self._update_options_button_state()
+
+    def _toggle_research_mode(self):
+        """Toggle research mode - switches to Haiku model for web research."""
+        self._research_mode = not self._research_mode
+        if self._research_mode:
+            # Find and set Haiku model
+            for model in MODELS:
+                if "haiku" in model["id"].lower():
+                    self._set_model(model, manual=False)
+                    self.append_message("system", "[Research mode: Using Claude 3 Haiku]")
+                    break
+        self._update_options_button_state()
+
+    def _add_to_project_folder(self, mode: str = "active"):
+        """Open folder picker to add content to a project folder.
+
+        Args:
+            mode: "active" for current tab only, "all" for all open tabs
+        """
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Select Project Folder",
+            "",
+            QFileDialog.Option.ShowDirsOnly,
+        )
+        if folder:
+            if mode == "all":
+                self.append_message("system", f"[Adding all tabs to: {folder}]")
+            else:
+                self.append_message("system", f"[Adding active tab to: {folder}]")
+            # TODO: Implement actual file saving logic here
 
     def _send_message(self):
-        text = self.input_field.text().strip()
+        text = self.input_field.toPlainText().strip()
         if text:
             self.append_message("user", text)
             self.message_sent.emit(text, self.current_model["id"], self.context_mode)
@@ -1024,37 +1098,70 @@ class SidePanel(QWidget):
                 }}
             """)
 
-    def _apply_context_toggle_style(self):
-        """Apply styles to the context toggle button based on its state."""
+    def _get_options_menu_style(self, has_active_item: bool = False) -> str:
+        """Get stylesheet for the options popup menu (Metropolis theme)."""
+        # Metropolis dark theme colors
+        bg = "#1a2a2a"
+        border = "rgba(180,210,190,0.15)"
+        text = "#8aa898"
+        text_active = "#7fbf8f"
+        hover_bg = "rgba(180,210,190,0.08)"
+        separator = "rgba(180,210,190,0.1)"
+
+        return f"""
+            QMenu {{
+                background-color: {bg};
+                border: 1px solid {border};
+                border-radius: 10px;
+                padding: 6px 4px;
+                min-width: 160px;
+                max-width: 180px;
+            }}
+            QMenu::item {{
+                background-color: transparent;
+                color: {text};
+                padding: 7px 12px;
+                border-radius: 5px;
+                font-size: 11px;
+                margin: 1px 4px;
+            }}
+            QMenu::item:selected {{
+                background-color: {hover_bg};
+                color: {text_active};
+            }}
+            QMenu::separator {{
+                height: 1px;
+                background: {separator};
+                margin: 5px 10px;
+            }}
+            QMenu::right-arrow {{
+                width: 8px;
+                height: 8px;
+            }}
+        """
+
+    def _update_options_button_state(self):
+        """Update options button appearance based on context state."""
         if self._include_context:
-            # Active state - show as enabled with accent color
-            self.context_toggle_btn.setStyleSheet("""
+            # Context active - green color
+            self.options_btn.setStyleSheet("""
                 QPushButton {
-                    background: rgba(127, 191, 143, 0.15);
-                    border: 1px solid rgba(127, 191, 143, 0.3);
-                    border-radius: 3px;
+                    background: transparent;
+                    border: none;
                     color: #7fbf8f;
-                    font-size: 10px;
-                    padding: 2px 8px;
-                }
-                QPushButton:hover {
-                    background: rgba(127, 191, 143, 0.25);
+                    font-size: 16px;
+                    font-weight: bold;
                 }
             """)
         else:
-            # Inactive state - dimmed
-            self.context_toggle_btn.setStyleSheet("""
+            # Context off - dimmed
+            self.options_btn.setStyleSheet("""
                 QPushButton {
                     background: transparent;
-                    border: 1px solid rgba(180,210,190,0.15);
-                    border-radius: 3px;
+                    border: none;
                     color: rgba(180,210,190,0.4);
-                    font-size: 10px;
-                    padding: 2px 8px;
-                }
-                QPushButton:hover {
-                    background: rgba(180,210,190,0.08);
-                    color: rgba(180,210,190,0.6);
+                    font-size: 16px;
+                    font-weight: bold;
                 }
             """)
 
@@ -1147,21 +1254,21 @@ class SidePanel(QWidget):
         if self.model_btn.menu():
             self.model_btn.menu().setStyleSheet(menu_style)
 
-        # Context toggle button
-        self._apply_context_toggle_style()
+        # Options button (+ button in input row)
+        self._update_options_button_state()
 
-        # Input row background (transparent border reserves space for focus border)
+        # Input container with visible rounded border (matches design mockup)
         self.input_row_widget.setStyleSheet("""
             QWidget {
-                background: rgba(180,210,190,0.04);
-                border: 1px solid transparent;
-                border-radius: 3px;
+                background: rgba(180,210,190,0.02);
+                border: 1px solid rgba(180,210,190,0.25);
+                border-radius: 8px;
             }
         """)
 
-        # Input field
+        # Input field (multi-line text area)
         self.input_field.setStyleSheet("""
-            QLineEdit {
+            QPlainTextEdit {
                 background: transparent;
                 border: none;
                 color: #c8e0ce;

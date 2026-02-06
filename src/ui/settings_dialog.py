@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QGroupBox,
+    QLineEdit,
     QPlainTextEdit,
     QVBoxLayout,
 )
@@ -111,6 +112,17 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(font_group)
 
+        # API Keys group
+        api_group = QGroupBox("API Keys")
+        api_layout = QFormLayout(api_group)
+
+        self.anthropic_key_edit = QLineEdit()
+        self.anthropic_key_edit.setPlaceholderText("Enter your Anthropic API key...")
+        self.anthropic_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        api_layout.addRow("Anthropic (Haiku):", self.anthropic_key_edit)
+
+        layout.addWidget(api_group)
+
         # Preview
         preview_group = QGroupBox("Preview")
         preview_layout = QVBoxLayout(preview_group)
@@ -189,6 +201,20 @@ class SettingsDialog(QDialog):
             QLabel {
                 color: #CCCCCC;
             }
+            QLineEdit {
+                background-color: #3C3C3C;
+                color: #CCCCCC;
+                border: 1px solid #555555;
+                border-radius: 3px;
+                padding: 4px 8px;
+                min-height: 20px;
+            }
+            QLineEdit:hover {
+                border-color: #007ACC;
+            }
+            QLineEdit:focus {
+                border-color: #007ACC;
+            }
             QPushButton {
                 background-color: #0E639C;
                 color: #FFFFFF;
@@ -235,6 +261,9 @@ class SettingsDialog(QDialog):
         if font_size <= 0:
             font_size = 12
         self.size_combo.setCurrentText(str(font_size))
+
+        # API Keys
+        self.anthropic_key_edit.setText(self.settings.get_anthropic_api_key())
 
         self._updating = False
         self._update_preview()
@@ -290,6 +319,9 @@ class SettingsDialog(QDialog):
         if size <= 0:
             size = 12
         self.settings.set_font_size(size)
+
+        # Save API keys
+        self.settings.set_anthropic_api_key(self.anthropic_key_edit.text())
 
         self.settings_changed.emit()
 

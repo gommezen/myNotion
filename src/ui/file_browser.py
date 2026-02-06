@@ -8,8 +8,10 @@ from pathlib import Path
 from PyQt6.QtCore import QDir, QModelIndex, pyqtSignal
 from PyQt6.QtGui import QFileSystemModel
 from PyQt6.QtWidgets import (
+    QFileDialog,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -39,6 +41,13 @@ class FileBrowserPanel(QWidget):
         self.title_label = QLabel("FILES")
         header_layout.addWidget(self.title_label)
         header_layout.addStretch()
+
+        # Open folder button
+        self.open_folder_btn = QPushButton("📁")
+        self.open_folder_btn.setFixedSize(20, 20)
+        self.open_folder_btn.setToolTip("Open project folder")
+        self.open_folder_btn.clicked.connect(self.open_folder_dialog)
+        header_layout.addWidget(self.open_folder_btn)
 
         layout.addWidget(header)
 
@@ -76,6 +85,17 @@ class FileBrowserPanel(QWidget):
             root_index = self.model.setRootPath(path)
             self.tree_view.setRootIndex(root_index)
 
+    def open_folder_dialog(self):
+        """Open a folder picker to select project root."""
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Select Project Folder",
+            self.model.rootPath(),
+            QFileDialog.Option.ShowDirsOnly,
+        )
+        if folder:
+            self.set_root_path(folder)
+
     def _on_item_double_clicked(self, index: QModelIndex):
         """Handle double-click on a file item."""
         filepath = self.model.filePath(index)
@@ -105,6 +125,18 @@ class FileBrowserPanel(QWidget):
                 font-weight: 600;
                 letter-spacing: 0.1em;
                 text-transform: uppercase;
+            }}
+        """)
+
+        self.open_folder_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                border: none;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background: {hover_bg};
+                border-radius: 3px;
             }}
         """)
 

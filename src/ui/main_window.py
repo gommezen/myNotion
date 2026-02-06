@@ -486,6 +486,11 @@ class MainWindow(QMainWindow):
         open_action.triggered.connect(self.open_file)
         file_menu.addAction(open_action)
 
+        open_folder_action = QAction(self.tr("Open Folder"), self)
+        open_folder_action.setShortcut(QKeySequence("Ctrl+Shift+O"))
+        open_folder_action.triggered.connect(self.open_folder)
+        file_menu.addAction(open_folder_action)
+
         # Recent files submenu
         self.recent_menu = file_menu.addMenu(self.tr("Recent"))
         self._update_recent_menu()
@@ -1051,6 +1056,10 @@ class MainWindow(QMainWindow):
         )
         if filepath:
             self._open_file_path(filepath)
+
+    def open_folder(self):
+        """Open a folder dialog to select project folder for file browser."""
+        self.file_browser.open_folder_dialog()
 
     def save_file(self):
         """Save the current file."""
