@@ -1,4 +1,4 @@
-D# Python
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -59,9 +59,15 @@ pip-delete-this-directory.txt
 # OS
 .DS_Store
 Thumbs.db
-+nul
 
 # Claude Code
 CLAUDE.md
 .claude/
+
+# Security - never commit secrets
+*.pem
+*.key
+secrets.json
+config.local.*
+*.secret
 
