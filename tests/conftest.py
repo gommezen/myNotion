@@ -244,6 +244,33 @@ def isolated_settings(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def create_side_panel(qapp):
+    """
+    Factory fixture that creates SidePanel widgets for testing.
+
+    Usage:
+        def test_panel(create_side_panel, qtbot):
+            panel = create_side_panel()
+            qtbot.addWidget(panel)
+    """
+    panels = []
+
+    def _factory(layout_mode=None):
+        from ui.side_panel import SidePanel
+
+        panel = SidePanel()
+        if layout_mode is not None:
+            panel.set_layout_mode(layout_mode)
+        panels.append(panel)
+        return panel
+
+    yield _factory
+
+    for panel in panels:
+        panel.deleteLater()
+
+
+@pytest.fixture
 def create_editor_tab(qapp):
     """
     Factory fixture that creates EditorTab widgets for testing.
