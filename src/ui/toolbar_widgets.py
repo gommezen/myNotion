@@ -38,8 +38,16 @@ class FormattingToolbar(QWidget):
         self.headings_btn.setToolTip("Insert Heading")
         self.headings_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         headings_menu = QMenu(self)
+        heading_names = {
+            1: "Title",
+            2: "Subtitle",
+            3: "Heading",
+            4: "Subheading",
+            5: "Body",
+            6: "Caption",
+        }
         for i in range(1, 7):
-            action = headings_menu.addAction(f"Heading {i}")
+            action = headings_menu.addAction(heading_names[i])
             action.triggered.connect(lambda checked, level=i: self.heading_selected.emit(level))
         self.headings_btn.setMenu(headings_menu)
         layout.addWidget(self.headings_btn)

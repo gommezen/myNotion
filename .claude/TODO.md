@@ -2,16 +2,14 @@
 
 ## Next Up (Priority)
 
-- [ ] **Tab bar height adjustment** - Reduce active tab top portion so "+" new tab button sits on background
-  - See design_decisions.pdf for reference (blue = bg, red = active tab)
-  - Currently tabs extend full height, need to show more background above
+- [ ] **Theme flash on startup** - Editor panel briefly shows wrong background color before theme applies
+  - Caused by Qt rendering first frame before stylesheets fully cascade
+  - Consider deferring `show()` until after first paint cycle
 
 - [ ] **Align AI prompts with model selector** - Fine-tune left-alignment of "AI Prompts" toggle and model selector text
   - See design_decisions.pdf page 3 for reference layout
   - Reduced input_layout left margin from 16→12 to compensate for QToolButton internal padding
   - May need further pixel adjustment after visual review
-
-- [ ] **Text completion/suggestions** - AI-powered autocomplete
 
 ## Recently Completed
 
