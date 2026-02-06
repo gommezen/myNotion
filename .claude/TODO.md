@@ -2,6 +2,27 @@
 
 ## Next Up (Priority)
 
+- [ ] **Line-level Code Completion (Copilot-style)** - Inline AI code suggestions
+  - **Model**: deepseek-coder:1.3b via Ollama (`ollama pull deepseek-coder:1.3b`)
+  - **Default: OFF** — user opts in via Settings or Ctrl+Shift+Space toggle
+  - **On/Off toggle**:
+    - Settings dialog: Checkbox "Enable AI code suggestions"
+    - Quick toggle: Ctrl+Shift+Space
+    - Status bar indicator: ◈ (active) / ◇ (off)
+  - **Triggers**: Enter (new line), 600ms pause at end of line, `:` after def/class/if/for/while
+  - **FIM format**: `<｜fim▁begin｜>{100 lines above}<｜fim▁hole｜>{20 lines below}<｜fim▁end｜>`
+  - **Ghost text**: dimmed rgba(180,210,190,0.35), drawn via paintEvent QPainter overlay
+  - **Accept/dismiss**: Tab (accept all), Ctrl+→ (accept one line), typing/Esc (dismiss)
+  - **Settings**: Enable checkbox (default off), delay slider 200–1000ms, max lines slider 1–10
+  - **Implementation**:
+    - New file: `src/ai/completion.py` — async CompletionManager (no threads, 10s timeout)
+    - Modify: `src/ai/providers/ollama.py` — add `raw=True` param for FIM
+    - Modify: `src/core/settings.py` — 3 new settings (enabled, delay, max_lines)
+    - Modify: `src/ui/editor_tab.py` — ghost text rendering, trigger logic, keyPressEvent
+    - Modify: `src/ui/settings_dialog.py` — checkbox + sliders UI group
+    - Modify: `src/ui/main_window.py` — status bar indicator, Ctrl+Shift+Space shortcut
+    - New file: `tests/test_completion.py`
+
 - [ ] **Create GitHub release for v0.2.0** - Publish release notes on GitHub
   - Use `gh release create v0.2.0` with changelog (packaging, editor fixes, AI tests)
 
@@ -11,6 +32,7 @@
   - May need further pixel adjustment after visual review
 
 ## Recently Completed
+
 
 - [x] **Startup theme flash fixed** - Editor panel no longer flashes wrong background on launch
   - Moved `_apply_theme()` to after all UI widgets are constructed
