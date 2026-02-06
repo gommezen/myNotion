@@ -9,10 +9,5 @@ httpx>=0.27.0  # Async HTTP client for AI APIs
 # AI Providers
 ollama>=0.3.0  # Ollama Python client
 
-# Testing
-pytest>=8.0.0
-pytest-qt>=4.4.0
-pytest-asyncio>=0.23.0
-
 # Packaging
 pyinstaller>=6.3.0

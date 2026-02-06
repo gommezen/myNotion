@@ -21,7 +21,6 @@ class FormattingToolbar(QWidget):
     bold_clicked = pyqtSignal()
     italic_clicked = pyqtSignal()
     link_clicked = pyqtSignal()
-    table_clicked = pyqtSignal()
     clear_format_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -87,13 +86,6 @@ class FormattingToolbar(QWidget):
         self.link_btn.clicked.connect(self.link_clicked.emit)
         layout.addWidget(self.link_btn)
 
-        # Table
-        self.table_btn = QToolButton()
-        self.table_btn.setText("\u25a6")  # Grid symbol
-        self.table_btn.setToolTip("Insert Table")
-        self.table_btn.clicked.connect(self.table_clicked.emit)
-        layout.addWidget(self.table_btn)
-
         # Separator
         layout.addSpacing(12)
 
@@ -149,7 +141,6 @@ class FormattingToolbar(QWidget):
             self.bold_btn,
             self.italic_btn,
             self.link_btn,
-            self.table_btn,
             self.clear_btn,
         ]:
             btn.setStyleSheet(button_style)

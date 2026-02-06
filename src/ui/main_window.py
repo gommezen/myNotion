@@ -721,7 +721,6 @@ class MainWindow(QMainWindow):
 
         # Build a custom header: [MenuBar] --- [FormattingToolbar centered] ---
         self._header_widget = QWidget(self)
-        self._header_widget.setAutoFillBackground(True)
         header_layout = QHBoxLayout(self._header_widget)
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(0)
@@ -739,7 +738,6 @@ class MainWindow(QMainWindow):
         self.formatting_toolbar.bold_clicked.connect(self._toggle_bold)
         self.formatting_toolbar.italic_clicked.connect(self._toggle_italic)
         self.formatting_toolbar.link_clicked.connect(self._insert_link)
-        self.formatting_toolbar.table_clicked.connect(self._insert_table)
         self.formatting_toolbar.clear_format_clicked.connect(self._clear_formatting)
 
         # Apply theme
@@ -1260,15 +1258,27 @@ class MainWindow(QMainWindow):
         editor.setTextCursor(cursor)
 
     def _insert_list(self, list_type: str):
-        """Insert list marker at cursor."""
+        """Insert list marker at cursor or on each selected line."""
         editor = self.current_editor()
         if not editor:
             return
 
         cursor = editor.textCursor()
-        cursor.movePosition(cursor.MoveOperation.StartOfBlock)
+        selected = cursor.selectedText()
         marker = "- " if list_type == "bullet" else "1. "
-        cursor.insertText(marker)
+
+        if selected and "\u2029" in selected:
+            # Multi-line selection: prepend marker to each line
+            lines = selected.split("\u2029")
+            if list_type == "bullet":
+                new_text = "\n".join("- " + line for line in lines)
+            else:
+                new_text = "\n".join(f"{i}. {line}" for i, line in enumerate(lines, 1))
+            cursor.insertText(new_text)
+        else:
+            # Single line: move to start and insert marker
+            cursor.movePosition(cursor.MoveOperation.StartOfBlock)
+            cursor.insertText(marker)
         editor.setTextCursor(cursor)
 
     def _insert_link(self):
@@ -1287,15 +1297,6 @@ class MainWindow(QMainWindow):
             cursor.setPosition(pos + 1)
             cursor.setPosition(pos + 5, cursor.MoveMode.KeepAnchor)
             editor.setTextCursor(cursor)
-
-    def _insert_table(self):
-        """Insert markdown table template."""
-        editor = self.current_editor()
-        if not editor:
-            return
-
-        table = "| Header 1 | Header 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |\n"
-        editor.textCursor().insertText(table)
 
     def _clear_formatting(self):
         """Strip markdown formatting from selected text."""

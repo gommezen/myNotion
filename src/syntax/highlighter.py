@@ -503,13 +503,19 @@ class MarkdownHighlighter(BaseHighlighter):
         # Headers
         self.rules.append(HighlightRule(QRegularExpression(r"^#{1,6}\s.*$"), self.keyword_format))
 
-        # Bold
-        self.rules.append(HighlightRule(QRegularExpression(r"\*\*[^*]+\*\*"), self.function_format))
-        self.rules.append(HighlightRule(QRegularExpression(r"__[^_]+__"), self.function_format))
+        # Bold — render with bold font weight
+        bold_format = QTextCharFormat()
+        bold_format.setForeground(QColor(self._get_color("function")))
+        bold_format.setFontWeight(700)
+        self.rules.append(HighlightRule(QRegularExpression(r"\*\*[^*]+\*\*"), bold_format))
+        self.rules.append(HighlightRule(QRegularExpression(r"__[^_]+__"), bold_format))
 
-        # Italic
-        self.rules.append(HighlightRule(QRegularExpression(r"\*[^*]+\*"), self.decorator_format))
-        self.rules.append(HighlightRule(QRegularExpression(r"_[^_]+_"), self.decorator_format))
+        # Italic — render with italic font
+        italic_format = QTextCharFormat()
+        italic_format.setForeground(QColor(self._get_color("decorator")))
+        italic_format.setFontItalic(True)
+        self.rules.append(HighlightRule(QRegularExpression(r"\*[^*]+\*"), italic_format))
+        self.rules.append(HighlightRule(QRegularExpression(r"_[^_]+_"), italic_format))
 
         # Code
         self.rules.append(HighlightRule(QRegularExpression(r"`[^`]+`"), self.string_format))

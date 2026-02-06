@@ -287,7 +287,7 @@ class SidePanel(QWidget):
         # ─── Input area ───
         input_section = QWidget()
         input_layout = QVBoxLayout(input_section)
-        input_layout.setContentsMargins(16, 0, 16, 10)
+        input_layout.setContentsMargins(12, 0, 16, 10)
         input_layout.setSpacing(5)
 
         # Model selector row
@@ -1125,7 +1125,7 @@ class SidePanel(QWidget):
                     border-radius: 3px;
                     color: {self._hex_to_rgba(fg, 0.5)};
                     font-size: 11px;
-                    padding: 6px 4px;
+                    padding: 6px 0px;
                     text-align: left;
                 }}
                 QPushButton:hover {{
@@ -1236,6 +1236,7 @@ class SidePanel(QWidget):
                 font-size: 10px;
                 font-weight: 600;
                 padding: 2px 0;
+                margin: 0;
                 letter-spacing: 0.1em;
                 text-transform: uppercase;
                 text-align: left;
@@ -1257,8 +1258,10 @@ class SidePanel(QWidget):
                 font-size: 10px;
                 font-weight: 600;
                 padding: 2px 0;
+                margin: 0;
                 letter-spacing: 0.1em;
                 text-transform: uppercase;
+                text-align: left;
             }}
             QToolButton:hover {{
                 color: {self._hex_to_rgba(fg, 0.8)};
