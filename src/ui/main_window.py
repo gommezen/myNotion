@@ -3,6 +3,8 @@ Main application window with tabs, menus, and toolbar.
 """
 
 import contextlib
+import ctypes
+import sys
 from pathlib import Path
 
 from PyQt6.QtCore import (
@@ -76,6 +78,23 @@ class MainWindow(QMainWindow):
         h = hex_color.lstrip("#")
         r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
         return f"rgba({r},{g},{b},{alpha})"
+
+    def _apply_title_bar_color(self, hex_color: str):
+        """Set the Windows title bar color using the DWM API."""
+        if sys.platform != "win32":
+            return
+        try:
+            hwnd = int(self.winId())
+            h = hex_color.lstrip("#")
+            # DWM expects COLORREF: 0x00BBGGRR
+            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+            color = ctypes.c_int(r | (g << 8) | (b << 16))
+            # DWMWA_CAPTION_COLOR = 35 (Windows 11 / Windows 10 22H2+)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd, 35, ctypes.byref(color), ctypes.sizeof(color)
+            )
+        except Exception:
+            pass  # Silently ignore on unsupported Windows versions
 
     def _apply_theme(self):
         """Apply current theme to the entire application."""
@@ -220,6 +239,9 @@ class MainWindow(QMainWindow):
                 border: 1px solid {theme.keyword};
             }}
         """)
+
+        # Set Windows title bar color to match theme
+        self._apply_title_bar_color(chrome_bg)
 
     def _setup_ui(self):
         """Initialize the main UI components."""
