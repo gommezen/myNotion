@@ -33,7 +33,6 @@ from PyQt6.QtWidgets import (
     QToolButton,
     QVBoxLayout,
     QWidget,
-    QWidgetAction,
 )
 
 from core.recent_files import RecentFilesManager
@@ -242,6 +241,10 @@ class MainWindow(QMainWindow):
 
         # Set Windows title bar color to match theme
         self._apply_title_bar_color(chrome_bg)
+
+        # Set header widget background to match menu bar
+        if hasattr(self, "_header_widget"):
+            self._header_widget.setStyleSheet(f"QWidget {{ background-color: {chrome_bg}; }}")
 
     def _setup_ui(self):
         """Initialize the main UI components."""
@@ -500,7 +503,10 @@ class MainWindow(QMainWindow):
 
     def _setup_menus(self):
         """Create the menu bar and menus."""
-        menubar = self.menuBar()
+        from PyQt6.QtWidgets import QMenuBar
+
+        menubar = QMenuBar(self)
+        self._menu_bar = menubar
 
         # File menu
         file_menu = menubar.addMenu(self.tr("&File"))
@@ -708,13 +714,24 @@ class MainWindow(QMainWindow):
             self._collapse_side_panel()
 
     def _setup_toolbar(self):
-        """Create the formatting toolbar inline with menu bar."""
+        """Create the formatting toolbar centered inline with menu bar."""
+        from PyQt6.QtWidgets import QHBoxLayout
+
         self.formatting_toolbar = FormattingToolbar(self)
 
-        # Add as widget action to menu bar (appears after menus)
-        toolbar_action = QWidgetAction(self)
-        toolbar_action.setDefaultWidget(self.formatting_toolbar)
-        self.menuBar().addAction(toolbar_action)
+        # Build a custom header: [MenuBar] --- [FormattingToolbar centered] ---
+        self._header_widget = QWidget(self)
+        self._header_widget.setAutoFillBackground(True)
+        header_layout = QHBoxLayout(self._header_widget)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(0)
+
+        header_layout.addWidget(self._menu_bar)
+        header_layout.addStretch(1)
+        header_layout.addWidget(self.formatting_toolbar)
+        header_layout.addStretch(1)
+
+        self.setMenuWidget(self._header_widget)
 
         # Connect signals
         self.formatting_toolbar.heading_selected.connect(self._insert_heading)
@@ -723,6 +740,7 @@ class MainWindow(QMainWindow):
         self.formatting_toolbar.italic_clicked.connect(self._toggle_italic)
         self.formatting_toolbar.link_clicked.connect(self._insert_link)
         self.formatting_toolbar.table_clicked.connect(self._insert_table)
+        self.formatting_toolbar.clear_format_clicked.connect(self._clear_formatting)
 
         # Apply theme
         self.formatting_toolbar.apply_theme(self.settings_manager.get_current_theme())
@@ -1278,3 +1296,29 @@ class MainWindow(QMainWindow):
 
         table = "| Header 1 | Header 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |\n"
         editor.textCursor().insertText(table)
+
+    def _clear_formatting(self):
+        """Strip markdown formatting from selected text."""
+        import re
+
+        editor = self.current_editor()
+        if not editor:
+            return
+
+        cursor = editor.textCursor()
+        selected = cursor.selectedText()
+        if not selected:
+            return
+
+        # Strip markdown syntax: bold, italic, headings, links, images
+        cleaned = selected
+        cleaned = re.sub(r"\*\*(.+?)\*\*", r"\1", cleaned)  # **bold**
+        cleaned = re.sub(r"\*(.+?)\*", r"\1", cleaned)  # *italic*
+        cleaned = re.sub(r"^#{1,6}\s+", "", cleaned, flags=re.MULTILINE)  # headings
+        cleaned = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", cleaned)  # [text](url)
+        cleaned = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", cleaned)  # ![alt](img)
+        cleaned = re.sub(r"~~(.+?)~~", r"\1", cleaned)  # ~~strikethrough~~
+        cleaned = re.sub(r"`(.+?)`", r"\1", cleaned)  # `inline code`
+
+        if cleaned != selected:
+            cursor.insertText(cleaned)

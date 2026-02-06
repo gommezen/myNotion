@@ -22,6 +22,7 @@ class FormattingToolbar(QWidget):
     italic_clicked = pyqtSignal()
     link_clicked = pyqtSignal()
     table_clicked = pyqtSignal()
+    clear_format_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -93,6 +94,16 @@ class FormattingToolbar(QWidget):
         self.table_btn.clicked.connect(self.table_clicked.emit)
         layout.addWidget(self.table_btn)
 
+        # Separator
+        layout.addSpacing(12)
+
+        # Clear formatting
+        self.clear_btn = QToolButton()
+        self.clear_btn.setText("A\u0338")  # A with combining slash
+        self.clear_btn.setToolTip("Clear Formatting")
+        self.clear_btn.clicked.connect(self.clear_format_clicked.emit)
+        layout.addWidget(self.clear_btn)
+
     def apply_theme(self, theme: Any):
         """Apply theme colors to all buttons."""
         button_style = f"""
@@ -139,6 +150,7 @@ class FormattingToolbar(QWidget):
             self.italic_btn,
             self.link_btn,
             self.table_btn,
+            self.clear_btn,
         ]:
             btn.setStyleSheet(button_style)
 

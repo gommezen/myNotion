@@ -157,81 +157,96 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(button_box)
 
+    @staticmethod
+    def _hex_to_rgba(hex_color: str, alpha: float) -> str:
+        """Convert hex color to rgba() CSS string."""
+        h = hex_color.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+
     def _apply_dark_style(self):
-        """Apply dark theme to the dialog."""
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #2D2D30;
-                color: #CCCCCC;
-            }
-            QGroupBox {
-                color: #CCCCCC;
-                border: 1px solid #3C3C3C;
+        """Apply current theme styling to the dialog."""
+        theme = self.settings.get_current_theme()
+        bg = theme.background
+        fg = theme.foreground
+        chrome_bg = theme.chrome_bg
+        chrome_border = theme.chrome_border
+        accent = theme.keyword
+        selection = theme.selection
+
+        self.setStyleSheet(f"""
+            QDialog {{
+                background-color: {chrome_bg};
+                color: {fg};
+            }}
+            QGroupBox {{
+                color: {fg};
+                border: 1px solid {chrome_border};
                 border-radius: 4px;
                 margin-top: 8px;
                 padding-top: 8px;
-            }
-            QGroupBox::title {
+            }}
+            QGroupBox::title {{
                 subcontrol-origin: margin;
                 left: 10px;
                 padding: 0 5px;
-            }
-            QComboBox {
-                background-color: #3C3C3C;
-                color: #CCCCCC;
-                border: 1px solid #555555;
+            }}
+            QComboBox {{
+                background-color: {bg};
+                color: {fg};
+                border: 1px solid {chrome_border};
                 border-radius: 3px;
                 padding: 4px 8px;
                 min-height: 20px;
                 min-width: 150px;
-            }
-            QComboBox:hover {
-                border-color: #007ACC;
-            }
-            QComboBox::drop-down {
+            }}
+            QComboBox:hover {{
+                border-color: {accent};
+            }}
+            QComboBox::drop-down {{
                 border: none;
                 width: 20px;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #2D2D30;
-                color: #CCCCCC;
-                selection-background-color: #094771;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {bg};
+                color: {fg};
+                selection-background-color: {selection};
                 outline: none;
-            }
-            QLabel {
-                color: #CCCCCC;
-            }
-            QLineEdit {
-                background-color: #3C3C3C;
-                color: #CCCCCC;
-                border: 1px solid #555555;
+            }}
+            QLabel {{
+                color: {fg};
+            }}
+            QLineEdit {{
+                background-color: {bg};
+                color: {fg};
+                border: 1px solid {chrome_border};
                 border-radius: 3px;
                 padding: 4px 8px;
                 min-height: 20px;
-            }
-            QLineEdit:hover {
-                border-color: #007ACC;
-            }
-            QLineEdit:focus {
-                border-color: #007ACC;
-            }
-            QPushButton {
-                background-color: #0E639C;
-                color: #FFFFFF;
+            }}
+            QLineEdit:hover {{
+                border-color: {accent};
+            }}
+            QLineEdit:focus {{
+                border-color: {accent};
+            }}
+            QPushButton {{
+                background-color: {self._hex_to_rgba(accent, 0.8)};
+                color: {fg};
                 border: none;
                 border-radius: 3px;
                 padding: 6px 16px;
                 min-width: 80px;
-            }
-            QPushButton:hover {
-                background-color: #1177BB;
-            }
-            QPushButton:pressed {
-                background-color: #094771;
-            }
-            QDialogButtonBox QPushButton {
+            }}
+            QPushButton:hover {{
+                background-color: {accent};
+            }}
+            QPushButton:pressed {{
+                background-color: {selection};
+            }}
+            QDialogButtonBox QPushButton {{
                 min-width: 70px;
-            }
+            }}
         """)
 
     def _load_settings(self):
@@ -302,7 +317,7 @@ class SettingsDialog(QDialog):
                 background-color: {theme.background};
                 color: {theme.foreground};
                 selection-background-color: {theme.selection};
-                border: 1px solid #3C3C3C;
+                border: 1px solid {theme.chrome_border};
                 border-radius: 3px;
             }}
         """)
