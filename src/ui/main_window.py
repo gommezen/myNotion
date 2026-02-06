@@ -252,7 +252,12 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(300, 200)  # Allow small window like Notepad
 
         # Set MyNotion icon (Art Deco / Metropolis theme)
-        icon_path = Path(__file__).parent.parent.parent / "resources" / "mynotion.ico"
+        # Support both development (src/ui/ -> project root) and PyInstaller bundle
+        if getattr(sys, "frozen", False):
+            base_path = Path(sys._MEIPASS)
+        else:
+            base_path = Path(__file__).parent.parent.parent
+        icon_path = base_path / "resources" / "mynotion.ico"
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
 

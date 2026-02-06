@@ -2,6 +2,16 @@
 
 ## Next Up (Priority)
 
+- [ ] **Session restore** - Reopen tabs from last session on launch
+  - Save open file paths, cursor positions, and scroll state on exit
+  - Restore tabs automatically when launching from Windows search
+  - Handle missing files gracefully (file moved/deleted since last session)
+
+- [ ] **Auto-save** - Periodic automatic saving to prevent data loss
+  - Save every 30s or on window focus loss
+  - Only save files that have a path (skip untitled tabs or use temp location)
+  - Visual indicator in status bar when auto-save triggers
+
 - [ ] **Theme flash on startup** - Editor panel briefly shows wrong background color before theme applies
   - Caused by Qt rendering first frame before stylesheets fully cascade
   - Consider deferring `show()` until after first paint cycle

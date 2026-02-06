@@ -46,6 +46,7 @@ htmlcov/
 # Distribution
 *.manifest
 *.spec
+!MyNotion.spec
 
 # Installer logs
 pip-log.txt
@@ -63,6 +64,9 @@ Thumbs.db
 # Claude Code
 CLAUDE.md
 .claude/
+
+# Documents
+design_decisions.pdf
 
 # Security - never commit secrets
 *.pem
