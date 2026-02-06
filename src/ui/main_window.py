@@ -70,6 +70,13 @@ class MainWindow(QMainWindow):
         # Create initial tab
         self.new_tab()
 
+    @staticmethod
+    def _hex_to_rgba(hex_color: str, alpha: float) -> str:
+        """Convert hex color to rgba() CSS string."""
+        h = hex_color.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+
     def _apply_theme(self):
         """Apply current theme to the entire application."""
         theme = self.settings_manager.get_current_theme()
@@ -99,7 +106,7 @@ class MainWindow(QMainWindow):
                 background-color: transparent;
             }}
             QMenuBar::item:selected {{
-                background-color: rgba(127, 191, 143, 0.2);
+                background-color: {self._hex_to_rgba(fg, 0.15)};
             }}
             QMenu {{
                 background-color: {chrome_bg};
@@ -112,8 +119,8 @@ class MainWindow(QMainWindow):
                 padding: 6px 30px 6px 20px;
             }}
             QMenu::item:selected {{
-                background-color: rgba(127, 191, 143, 0.25);
-                color: #c8e0ce;
+                background-color: {self._hex_to_rgba(fg, 0.15)};
+                color: {fg};
             }}
             QMenu::separator {{
                 height: 1px;
@@ -147,12 +154,12 @@ class MainWindow(QMainWindow):
                 background-color: {bg};
             }}
             QTabBar {{
-                background-color: #121f1f;
+                background-color: {chrome_bg};
                 font-size: 11px;
             }}
             QTabBar::tab {{
-                background-color: #121f1f;
-                color: rgba(180, 210, 190, 0.5);
+                background-color: {chrome_bg};
+                color: {self._hex_to_rgba(fg, 0.5)};
                 padding: 8px 12px 8px 10px;
                 border: none;
                 border-top: 2px solid transparent;
@@ -160,17 +167,17 @@ class MainWindow(QMainWindow):
                 margin-right: 0px;
             }}
             QTabBar::tab:selected {{
-                background-color: #1a2a2a;
-                color: #c8e0ce;
-                border-top: 2px solid #d4a84b;
+                background-color: {bg};
+                color: {fg};
+                border-top: 2px solid {theme.keyword};
             }}
             QTabBar::tab:hover:!selected {{
-                background-color: #1a2a2a;
-                color: rgba(180, 210, 190, 0.7);
+                background-color: {bg};
+                color: {self._hex_to_rgba(fg, 0.7)};
             }}
             QStatusBar {{
                 background-color: {chrome_bg};
-                color: rgba(180, 210, 190, 0.6);
+                color: {self._hex_to_rgba(fg, 0.6)};
                 border-top: 1px solid {chrome_border};
                 font-size: 11px;
             }}
@@ -178,12 +185,12 @@ class MainWindow(QMainWindow):
                 border: none;
             }}
             QStatusBar QLabel {{
-                color: rgba(180, 210, 190, 0.6);
+                color: {self._hex_to_rgba(fg, 0.6)};
                 padding: 2px 12px;
                 font-size: 10px;
             }}
             QStatusBar QLabel:hover {{
-                color: #c8e0ce;
+                color: {fg};
                 background-color: {chrome_hover};
             }}
             QMessageBox {{
@@ -210,7 +217,7 @@ class MainWindow(QMainWindow):
                 background-color: {selection};
             }}
             QMessageBox QPushButton:default {{
-                border: 1px solid #d4a84b;
+                border: 1px solid {theme.keyword};
             }}
         """)
 
@@ -1149,9 +1156,10 @@ class MainWindow(QMainWindow):
         self._apply_theme()
         self._update_new_tab_button_style()
 
-        # Apply to side panel, file browser, and formatting toolbar
+        # Apply to side panel, file browser, activity bar, and formatting toolbar
         self.side_panel.apply_theme()
         self.file_browser.apply_theme()
+        self.activity_bar.apply_theme()
         self.formatting_toolbar.apply_theme(theme)
 
         # Apply to all editor tabs

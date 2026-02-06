@@ -5,6 +5,7 @@ Based on ai-panel-redesign-v2_1.jsx — exact 1:1 implementation.
 
 import html
 import re
+import textwrap
 from enum import Enum
 
 from PyQt6.QtCore import QEvent, Qt, QUrl, pyqtSignal
@@ -639,8 +640,9 @@ class SidePanel(QWidget):
             self.transfer_to_editor_requested.emit(code)
             self.append_message("system", "[Code transferred to editor]")
         elif self._layout_mode == LayoutMode.WRITING:
-            # In writing mode, transfer the full response text
-            self.transfer_to_editor_requested.emit(self._current_ai_response)
+            # In writing mode, transfer the full response text (wrapped)
+            wrapped = self._wrap_text_for_editor(self._current_ai_response)
+            self.transfer_to_editor_requested.emit(wrapped)
             self.append_message("system", "[Text transferred to editor]")
         else:
             self.append_message("system", "[No code blocks found in response]")
@@ -663,6 +665,31 @@ class SidePanel(QWidget):
             return "\n\n".join(block.strip() for block in matches if block.strip())
 
         return ""
+
+    def _wrap_text_for_editor(self, text: str, width: int = 60) -> str:
+        """Wrap long AI response text into lines suitable for the editor.
+
+        Preserves paragraph breaks, code-like lines, and list items.
+        Only wraps plain prose lines that exceed the width limit.
+        """
+        # Strip markdown code block fences if present
+        text = re.sub(r"```\w*\r?\n?", "", text)
+
+        paragraphs = text.split("\n\n")
+        wrapped = []
+        for para in paragraphs:
+            lines = para.split("\n")
+            out_lines = []
+            for line in lines:
+                # Skip wrapping for lines that look like code, lists, or headings
+                if line.startswith(("  ", "\t", "- ", "* ", "| ", "#", ">", "```")):
+                    out_lines.append(line)
+                elif len(line) > width:
+                    out_lines.append(textwrap.fill(line, width=width))
+                else:
+                    out_lines.append(line)
+            wrapped.append("\n".join(out_lines))
+        return "\n\n".join(wrapped)
 
     def _on_anchor_clicked(self, url: QUrl):
         """Handle clicks on links in the chat area."""
@@ -727,19 +754,20 @@ class SidePanel(QWidget):
             return
 
         text = self._current_ai_response
+        wrapped = self._wrap_text_for_editor(text)
         if action == "copy":
             clipboard = QApplication.clipboard()
             if clipboard:
-                clipboard.setText(text)
+                clipboard.setText(wrapped)
                 self.append_message("system", "[Text copied to clipboard]")
         elif action == "insert":
-            self.transfer_to_editor_requested.emit(text)
+            self.transfer_to_editor_requested.emit(wrapped)
             self.append_message("system", "[Text inserted at cursor]")
         elif action == "newtab":
-            self.new_tab_with_code_requested.emit(text, "text")
+            self.new_tab_with_code_requested.emit(wrapped, "text")
             self.append_message("system", "[Text opened in new tab]")
         elif action == "replace":
-            self.replace_selection_requested.emit(text)
+            self.replace_selection_requested.emit(wrapped)
             self.append_message("system", "[Selection replaced with new text]")
             self._has_selection_to_replace = False
 
@@ -1078,40 +1106,45 @@ class SidePanel(QWidget):
         """Public method for external theme updates."""
         self._apply_theme()
 
+    @staticmethod
+    def _hex_to_rgba(hex_color: str, alpha: float) -> str:
+        """Convert hex color to rgba() CSS string."""
+        h = hex_color.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+
     def _apply_prompt_button_styles(self):
         """Apply styles to prompt buttons (called from _apply_theme and _rebuild_prompts_grid)."""
-        text_main = "#8aa898"
+        theme = self.settings_manager.get_current_theme()
+        fg = theme.foreground
         for btn in self.prompt_buttons:
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background: transparent;
                     border: none;
                     border-radius: 3px;
-                    color: rgba(127, 191, 181, 0.6);
+                    color: {self._hex_to_rgba(fg, 0.5)};
                     font-size: 11px;
                     padding: 6px 4px;
                     text-align: left;
                 }}
                 QPushButton:hover {{
-                    background: rgba(180,210,190,0.08);
-                    color: {text_main};
+                    background: {self._hex_to_rgba(fg, 0.08)};
+                    color: {self._hex_to_rgba(fg, 0.8)};
                 }}
             """)
 
     def _get_options_menu_style(self, has_active_item: bool = False) -> str:
-        """Get stylesheet for the options popup menu (Metropolis theme)."""
-        # Metropolis dark theme colors
-        bg = "#1a2a2a"
-        border = "rgba(180,210,190,0.15)"
-        text = "#8aa898"
-        text_active = "#7fbf8f"
-        hover_bg = "rgba(180,210,190,0.08)"
-        separator = "rgba(180,210,190,0.1)"
+        """Get stylesheet for the options popup menu, themed to current theme."""
+        theme = self.settings_manager.get_current_theme()
+        bg = theme.background
+        fg = theme.foreground
+        accent = theme.function
 
         return f"""
             QMenu {{
                 background-color: {bg};
-                border: 1px solid {border};
+                border: 1px solid {self._hex_to_rgba(fg, 0.15)};
                 border-radius: 10px;
                 padding: 6px 4px;
                 min-width: 160px;
@@ -1119,19 +1152,19 @@ class SidePanel(QWidget):
             }}
             QMenu::item {{
                 background-color: transparent;
-                color: {text};
+                color: {self._hex_to_rgba(fg, 0.6)};
                 padding: 7px 12px;
                 border-radius: 5px;
                 font-size: 11px;
                 margin: 1px 4px;
             }}
             QMenu::item:selected {{
-                background-color: {hover_bg};
-                color: {text_active};
+                background-color: {self._hex_to_rgba(fg, 0.08)};
+                color: {accent};
             }}
             QMenu::separator {{
                 height: 1px;
-                background: {separator};
+                background: {self._hex_to_rgba(fg, 0.1)};
                 margin: 5px 10px;
             }}
             QMenu::right-arrow {{
@@ -1142,39 +1175,43 @@ class SidePanel(QWidget):
 
     def _update_options_button_state(self):
         """Update options button appearance based on context state."""
+        theme = self.settings_manager.get_current_theme()
+        fg = theme.foreground
+        accent = theme.function
         if self._include_context:
-            # Context active - green color
-            self.options_btn.setStyleSheet("""
-                QPushButton {
+            # Context active - accent color
+            self.options_btn.setStyleSheet(f"""
+                QPushButton {{
                     background: transparent;
                     border: none;
-                    color: #7fbf8f;
+                    color: {accent};
                     font-size: 16px;
                     font-weight: bold;
-                }
+                }}
             """)
         else:
             # Context off - dimmed
-            self.options_btn.setStyleSheet("""
-                QPushButton {
+            self.options_btn.setStyleSheet(f"""
+                QPushButton {{
                     background: transparent;
                     border: none;
-                    color: rgba(180,210,190,0.4);
+                    color: {self._hex_to_rgba(fg, 0.4)};
                     font-size: 16px;
                     font-weight: bold;
-                }
+                }}
             """)
 
     def _apply_theme(self):
-        """Apply Metropolis Art Deco theme."""
-        bg = "#1a2a2a"
-        text_main = "#8aa898"
-        accent = "#7fbf8f"
+        """Apply current theme colors to the side panel."""
+        theme = self.settings_manager.get_current_theme()
+        bg = theme.background
+        fg = theme.foreground
+        accent = theme.function
 
         self.setStyleSheet(f"""
             QWidget {{
                 background-color: {bg};
-                color: {text_main};
+                color: {self._hex_to_rgba(fg, 0.65)};
                 font-family: 'Consolas', 'SF Mono', monospace;
             }}
         """)
@@ -1183,7 +1220,7 @@ class SidePanel(QWidget):
         self.chat_area.setStyleSheet(f"""
             QTextBrowser {{
                 background-color: {bg};
-                color: {text_main};
+                color: {self._hex_to_rgba(fg, 0.65)};
                 border: none;
                 padding: 8px 16px;
                 font-size: 10px;
@@ -1195,7 +1232,7 @@ class SidePanel(QWidget):
             QPushButton {{
                 background: transparent;
                 border: none;
-                color: rgba(180,210,190,0.4);
+                color: {self._hex_to_rgba(fg, 0.4)};
                 font-size: 10px;
                 font-weight: 600;
                 padding: 2px 0;
@@ -1204,7 +1241,7 @@ class SidePanel(QWidget):
                 text-align: left;
             }}
             QPushButton:hover {{
-                color: {text_main};
+                color: {self._hex_to_rgba(fg, 0.8)};
             }}
         """)
 
@@ -1216,7 +1253,7 @@ class SidePanel(QWidget):
             QToolButton {{
                 background: transparent;
                 border: none;
-                color: rgba(180,210,190,0.4);
+                color: {self._hex_to_rgba(fg, 0.4)};
                 font-size: 10px;
                 font-weight: 600;
                 padding: 2px 0;
@@ -1224,7 +1261,7 @@ class SidePanel(QWidget):
                 text-transform: uppercase;
             }}
             QToolButton:hover {{
-                color: {text_main};
+                color: {self._hex_to_rgba(fg, 0.8)};
             }}
             QToolButton::menu-indicator {{
                 image: none;
@@ -1236,19 +1273,19 @@ class SidePanel(QWidget):
         menu_style = f"""
             QMenu {{
                 background-color: {bg};
-                border: 1px solid rgba(180,210,190,0.1);
+                border: 1px solid {self._hex_to_rgba(fg, 0.1)};
                 border-radius: 3px;
                 padding: 4px 0;
                 font-size: 10px;
             }}
             QMenu::item {{
-                color: rgba(180,210,190,0.6);
+                color: {self._hex_to_rgba(fg, 0.6)};
                 padding: 6px 12px;
                 font-size: 10px;
             }}
             QMenu::item:selected {{
-                color: {text_main};
-                background: rgba(180,210,190,0.08);
+                color: {self._hex_to_rgba(fg, 0.8)};
+                background: {self._hex_to_rgba(fg, 0.08)};
             }}
         """
         if self.model_btn.menu():
@@ -1257,24 +1294,24 @@ class SidePanel(QWidget):
         # Options button (+ button in input row)
         self._update_options_button_state()
 
-        # Input container with visible rounded border (matches design mockup)
-        self.input_row_widget.setStyleSheet("""
-            QWidget {
-                background: rgba(180,210,190,0.02);
-                border: 1px solid rgba(180,210,190,0.25);
+        # Input container with visible rounded border
+        self.input_row_widget.setStyleSheet(f"""
+            QWidget {{
+                background: {self._hex_to_rgba(fg, 0.02)};
+                border: 1px solid {self._hex_to_rgba(fg, 0.25)};
                 border-radius: 8px;
-            }
+            }}
         """)
 
         # Input field (multi-line text area)
-        self.input_field.setStyleSheet("""
-            QPlainTextEdit {
+        self.input_field.setStyleSheet(f"""
+            QPlainTextEdit {{
                 background: transparent;
                 border: none;
-                color: #c8e0ce;
+                color: {fg};
                 font-size: 10px;
                 padding: 0;
-            }
+            }}
         """)
 
         # Send button
@@ -1286,7 +1323,7 @@ class SidePanel(QWidget):
                 font-size: 12px;
             }}
             QPushButton:hover {{
-                color: {text_main};
+                color: {self._hex_to_rgba(fg, 0.8)};
             }}
         """)
 

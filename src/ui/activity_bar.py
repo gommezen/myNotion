@@ -6,6 +6,8 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QToolButton, QVBoxLayout, QWidget
 
+from core.settings import SettingsManager
+
 
 class ActivityBar(QWidget):
     """Vertical icon bar for switching between panels."""
@@ -66,9 +68,17 @@ class ActivityBar(QWidget):
         self._update_background()
         self._apply_style()
 
+    @staticmethod
+    def _hex_to_rgba(hex_color: str, alpha: float) -> str:
+        """Convert hex color to rgba() CSS string."""
+        h = hex_color.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+
     def _update_background(self):
         """Update background color based on collapsed state."""
-        bg = "#1a2a2a" if self._collapsed else "#121f1f"
+        theme = SettingsManager().get_current_theme()
+        bg = theme.background if self._collapsed else theme.chrome_bg
         self.setAutoFillBackground(True)
         palette = self.palette()
         palette.setColor(QPalette.ColorRole.Window, QColor(bg))
@@ -76,9 +86,11 @@ class ActivityBar(QWidget):
 
     def _apply_style(self):
         """Apply styles with active/inactive states."""
-        active_color = "#7fbf8f"  # Bright teal
-        inactive_color = "rgba(138,168,152,0.4)"
-        hover_color = "#8aa898"
+        theme = SettingsManager().get_current_theme()
+        fg = theme.foreground
+        active_color = theme.function
+        inactive_color = self._hex_to_rgba(fg, 0.4)
+        hover_color = self._hex_to_rgba(fg, 0.65)
 
         # AI button style - active has left border indicator
         ai_color = active_color if self._active_panel == "ai" else inactive_color
@@ -115,3 +127,8 @@ class ActivityBar(QWidget):
                 color: {hover_color if self._active_panel != "files" else active_color};
             }}
         """)
+
+    def apply_theme(self):
+        """Public method for external theme updates."""
+        self._update_background()
+        self._apply_style()
