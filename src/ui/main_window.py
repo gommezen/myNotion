@@ -57,19 +57,26 @@ class MainWindow(QMainWindow):
         self.settings_manager = SettingsManager()
         self.recent_files = RecentFilesManager(self)
 
-        self._apply_theme()
         self._setup_ui()
         self._setup_side_panel()
         self._setup_menus()
         self._setup_toolbar()
         self._setup_statusbar()
+        self._apply_theme()
+        self._apply_child_themes()
         self._restore_geometry()
 
         # Connect recent files changes
         self.recent_files.files_changed.connect(self._update_recent_menu)
 
-        # Create initial tab
-        self.new_tab()
+        # Restore previous session or create a blank tab
+        if not self._restore_session():
+            self.new_tab()
+
+        # Auto-save timer
+        self._auto_save_timer = QTimer(self)
+        self._auto_save_timer.timeout.connect(self._auto_save)
+        self._start_auto_save_timer()
 
     @staticmethod
     def _hex_to_rgba(hex_color: str, alpha: float) -> str:
@@ -117,7 +124,7 @@ class MainWindow(QMainWindow):
                 color: {fg};
                 border: none;
                 padding: 2px;
-                font-size: 11px;
+                font-size: 13px;
             }}
             QMenuBar::item {{
                 padding: 4px 8px;
@@ -131,7 +138,7 @@ class MainWindow(QMainWindow):
                 color: {fg};
                 border: 1px solid {chrome_border};
                 padding: 4px 0px;
-                font-size: 11px;
+                font-size: 13px;
             }}
             QMenu::item {{
                 padding: 6px 30px 6px 20px;
@@ -159,7 +166,7 @@ class MainWindow(QMainWindow):
                 border-radius: 3px;
                 padding: 4px 10px;
                 font-weight: bold;
-                font-size: 10px;
+                font-size: 12px;
             }}
             QToolBar QToolButton:hover {{
                 background-color: {chrome_hover};
@@ -237,6 +244,15 @@ class MainWindow(QMainWindow):
             QMessageBox QPushButton:default {{
                 border: 1px solid {theme.keyword};
             }}
+            QDockWidget {{
+                background-color: {bg};
+                border: none;
+            }}
+            QMainWindow::separator {{
+                background-color: {chrome_border};
+                width: 1px;
+                height: 1px;
+            }}
         """)
 
         # Set Windows title bar color to match theme
@@ -245,6 +261,24 @@ class MainWindow(QMainWindow):
         # Set header widget background to match menu bar
         if hasattr(self, "_header_widget"):
             self._header_widget.setStyleSheet(f"QWidget {{ background-color: {chrome_bg}; }}")
+
+    def _apply_child_themes(self):
+        """Apply theme to all child widgets after UI is fully constructed."""
+        theme = self.settings_manager.get_current_theme()
+        if hasattr(self, "side_panel"):
+            self.side_panel.apply_theme()
+        if hasattr(self, "file_browser"):
+            self.file_browser.apply_theme()
+        if hasattr(self, "activity_bar"):
+            self.activity_bar.apply_theme()
+        if hasattr(self, "formatting_toolbar"):
+            self.formatting_toolbar.apply_theme(theme)
+        if hasattr(self, "new_tab_btn"):
+            self._update_new_tab_button_style()
+        for i in range(self.tab_widget.count()):
+            editor = self.tab_widget.widget(i)
+            if isinstance(editor, EditorTab):
+                editor.apply_theme()
 
     def _setup_ui(self):
         """Initialize the main UI components."""
@@ -789,6 +823,108 @@ class MainWindow(QMainWindow):
             # No saved geometry, use default size
             self.resize(1000, 700)
 
+    def _save_session(self):
+        """Save current tab state for session restore."""
+        session_tabs = []
+        for i in range(self.tab_widget.count()):
+            editor = self.tab_widget.widget(i)
+            if not isinstance(editor, EditorTab):
+                continue
+            if not editor.filepath:
+                continue
+            cursor = editor.textCursor()
+            session_tabs.append(
+                {
+                    "filepath": editor.filepath,
+                    "cursor_line": cursor.blockNumber(),
+                    "cursor_col": cursor.columnNumber(),
+                    "scroll_pos": editor.verticalScrollBar().value(),
+                }
+            )
+
+        self.settings_manager.set_session_tabs(session_tabs)
+        self.settings_manager.set_session_active_tab(self.tab_widget.currentIndex())
+
+    def _restore_session(self) -> bool:
+        """Restore tabs from previous session.
+
+        Returns True if any tabs were restored.
+        """
+        session_tabs = self.settings_manager.get_session_tabs()
+        if not session_tabs:
+            return False
+
+        restored_any = False
+        for tab_data in session_tabs:
+            filepath = tab_data.get("filepath", "")
+            if not filepath or not Path(filepath).exists():
+                continue
+
+            self._open_file_path(filepath)
+            editor = self.current_editor()
+            if not editor:
+                continue
+
+            # Restore cursor position
+            cursor_line = tab_data.get("cursor_line", 0)
+            cursor_col = tab_data.get("cursor_col", 0)
+            cursor = editor.textCursor()
+            block = editor.document().findBlockByNumber(cursor_line)
+            if block.isValid():
+                pos = block.position() + min(cursor_col, max(0, block.length() - 1))
+                cursor.setPosition(pos)
+                editor.setTextCursor(cursor)
+
+            # Defer scroll restore so layout computes first
+            scroll_pos = tab_data.get("scroll_pos", 0)
+            QTimer.singleShot(
+                0,
+                lambda sp=scroll_pos, e=editor: e.verticalScrollBar().setValue(sp),
+            )
+
+            restored_any = True
+
+        # Restore active tab index
+        if restored_any:
+            active_index = self.settings_manager.get_session_active_tab()
+            if 0 <= active_index < self.tab_widget.count():
+                self.tab_widget.setCurrentIndex(active_index)
+
+        return restored_any
+
+    def _start_auto_save_timer(self):
+        """Start or restart the auto-save timer based on settings."""
+        if self.settings_manager.get_auto_save_enabled():
+            interval_ms = self.settings_manager.get_auto_save_interval() * 1000
+            self._auto_save_timer.start(interval_ms)
+        else:
+            self._auto_save_timer.stop()
+
+    def _auto_save(self):
+        """Auto-save all modified tabs that have a file path."""
+        saved_count = 0
+        for i in range(self.tab_widget.count()):
+            editor = self.tab_widget.widget(i)
+            if isinstance(editor, EditorTab) and editor.filepath and editor.document().isModified():
+                try:
+                    editor.save_file()
+                    saved_count += 1
+                except OSError:
+                    pass  # Silently skip files that fail to save
+
+        if saved_count > 0:
+            msg = f"Auto-saved {saved_count} file{'s' if saved_count > 1 else ''}"
+            self.statusbar.showMessage(msg, 3000)
+
+    def changeEvent(self, event):
+        """Handle window state changes (focus loss triggers auto-save)."""
+        super().changeEvent(event)
+        if (
+            event.type() == event.Type.WindowDeactivate
+            and self.settings_manager.get_auto_save_enabled()
+        ):
+            self._auto_save()
+
     def closeEvent(self, event):
         """Save geometry and handle unsaved changes on close."""
         # Check for unsaved changes in all tabs
@@ -828,6 +964,7 @@ class MainWindow(QMainWindow):
                 return
             # Discard: just continue closing
 
+        self._save_session()
         self.settings.setValue("geometry", self.saveGeometry())
         event.accept()
 
@@ -1193,24 +1330,10 @@ class MainWindow(QMainWindow):
 
     def _apply_settings_to_editors(self):
         """Apply changed settings to all editor tabs and window chrome."""
-        theme = self.settings_manager.get_current_theme()
-
-        # Re-apply window theme (menu bar, toolbar, tabs, status bar)
         self._apply_theme()
-        self._update_new_tab_button_style()
-
-        # Apply to side panel, file browser, activity bar, and formatting toolbar
-        self.side_panel.apply_theme()
-        self.file_browser.apply_theme()
-        self.activity_bar.apply_theme()
-        self.formatting_toolbar.apply_theme(theme)
-
-        # Apply to all editor tabs
-        for i in range(self.tab_widget.count()):
-            editor = self.tab_widget.widget(i)
-            if isinstance(editor, EditorTab):
-                editor.apply_theme()
+        self._apply_child_themes()
         self._update_status_bar()
+        self._start_auto_save_timer()
 
     # Formatting - inserts markdown syntax for plain text
     def _toggle_bold(self):

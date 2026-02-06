@@ -241,3 +241,44 @@ class SettingsManager:
     def set_anthropic_api_key(self, key: str):
         """Set the Anthropic API key."""
         self.settings.setValue("anthropic_api_key", key)
+
+    # Session restore settings
+    def get_session_tabs(self) -> list[dict]:
+        """Get saved session tab data."""
+        value = self.settings.value("session_tabs")
+        if value is None:
+            return []
+        return value
+
+    def set_session_tabs(self, tabs: list[dict]):
+        """Save session tab data."""
+        self.settings.setValue("session_tabs", tabs)
+
+    def get_session_active_tab(self) -> int:
+        """Get the active tab index from last session."""
+        return self.settings.value("session_active_tab", 0, type=int)
+
+    def set_session_active_tab(self, index: int):
+        """Save the active tab index."""
+        self.settings.setValue("session_active_tab", index)
+
+    # Auto-save settings
+    def get_auto_save_enabled(self) -> bool:
+        """Get whether auto-save is enabled."""
+        return self.settings.value("auto_save_enabled", True, type=bool)
+
+    def set_auto_save_enabled(self, enabled: bool):
+        """Set whether auto-save is enabled."""
+        self.settings.setValue("auto_save_enabled", enabled)
+
+    def get_auto_save_interval(self) -> int:
+        """Get auto-save interval in seconds."""
+        try:
+            interval = self.settings.value("auto_save_interval", 30, type=int)
+            return max(5, min(300, interval))
+        except (ValueError, TypeError):
+            return 30
+
+    def set_auto_save_interval(self, seconds: int):
+        """Set auto-save interval in seconds."""
+        self.settings.setValue("auto_save_interval", max(5, min(300, seconds)))

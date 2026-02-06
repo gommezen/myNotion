@@ -1124,6 +1124,7 @@ class SidePanel(QWidget):
                     border: none;
                     border-radius: 3px;
                     color: {self._hex_to_rgba(fg, 0.5)};
+                    font-family: 'Consolas', 'SF Mono', monospace;
                     font-size: 11px;
                     padding: 6px 0px;
                     text-align: left;

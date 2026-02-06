@@ -2,19 +2,8 @@
 
 ## Next Up (Priority)
 
-- [ ] **Session restore** - Reopen tabs from last session on launch
-  - Save open file paths, cursor positions, and scroll state on exit
-  - Restore tabs automatically when launching from Windows search
-  - Handle missing files gracefully (file moved/deleted since last session)
-
-- [ ] **Auto-save** - Periodic automatic saving to prevent data loss
-  - Save every 30s or on window focus loss
-  - Only save files that have a path (skip untitled tabs or use temp location)
-  - Visual indicator in status bar when auto-save triggers
-
-- [ ] **Theme flash on startup** - Editor panel briefly shows wrong background color before theme applies
-  - Caused by Qt rendering first frame before stylesheets fully cascade
-  - Consider deferring `show()` until after first paint cycle
+- [ ] **Create GitHub release for v0.2.0** - Publish release notes on GitHub
+  - Use `gh release create v0.2.0` with changelog (packaging, editor fixes, AI tests)
 
 - [ ] **Align AI prompts with model selector** - Fine-tune left-alignment of "AI Prompts" toggle and model selector text
   - See design_decisions.pdf page 3 for reference layout
@@ -22,6 +11,30 @@
   - May need further pixel adjustment after visual review
 
 ## Recently Completed
+
+- [x] **Startup theme flash fixed** - Editor panel no longer flashes wrong background on launch
+  - Moved `_apply_theme()` to after all UI widgets are constructed
+  - Added `_apply_child_themes()` for explicit theme cascade to all widgets
+  - Added QDockWidget and QMainWindow::separator styling
+
+- [x] **Session restore** - Reopens tabs from last session on launch
+  - Saves file paths, cursor positions, and scroll state on exit
+  - Restores tabs automatically on startup
+  - Handles missing files gracefully
+
+- [x] **Auto-save** - Periodic automatic saving with settings UI
+  - Configurable interval (10s–300s) in Settings dialog
+  - Saves on window focus loss
+  - Status bar notification on auto-save
+  - Themed checkbox with X mark indicator
+
+- [x] **Font size increase** - Menu bar and toolbar text bumped +2px
+  - Menu bar (File, Edit, View): 11px → 13px
+  - Menu dropdowns: 11px → 13px
+  - Formatting toolbar (H1, B, I, etc.): 10px → 12px
+
+- [x] **Writing mode font consistency** - Prompt buttons now use explicit Consolas font
+  - Fixed font inheritance issue when switching layout modes
 
 - [x] **Centered formatting toolbar** - Notepad-style toolbar inline with menu bar
   - H1 dropdown, Lists dropdown, Bold, Italic, Link, Table, Clear formatting
@@ -203,8 +216,8 @@
 
 ### Nice to Have
 - [x] GitHub repository setup (https://github.com/gommezen/myNotion)
-- [ ] **Auto-save** - Periodic automatic saving
-- [ ] **Session restore** - Reopen tabs from last session
+- [x] **Auto-save** - Periodic automatic saving
+- [x] **Session restore** - Reopen tabs from last session
 - [ ] **Split view** - View two files side by side
 - [ ] **Minimap** - Code overview on the side
 - [x] **File tree sidebar** - Browse project files (VS Code-style activity bar)

@@ -81,6 +81,7 @@ def run_app() -> int:
 
     # Create and show main window
     window = MainWindow()
+    app.processEvents()  # Force stylesheet cascade before first paint
     window.show()
 
     # Run event loop

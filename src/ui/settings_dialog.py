@@ -2,9 +2,12 @@
 Settings dialog for theme and font customization.
 """
 
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtGui import QFont, QFontDatabase
+import tempfile
+
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -123,6 +126,19 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(api_group)
 
+        # Auto-Save group
+        autosave_group = QGroupBox("Auto-Save")
+        autosave_layout = QFormLayout(autosave_group)
+
+        self.autosave_checkbox = QCheckBox("Enable auto-save")
+        autosave_layout.addRow(self.autosave_checkbox)
+
+        self.autosave_interval_combo = QComboBox()
+        self.autosave_interval_combo.addItems(["10", "15", "30", "60", "120", "300"])
+        autosave_layout.addRow("Interval (seconds):", self.autosave_interval_combo)
+
+        layout.addWidget(autosave_group)
+
         # Preview
         preview_group = QGroupBox("Preview")
         preview_layout = QVBoxLayout(preview_group)
@@ -156,6 +172,24 @@ class SettingsDialog(QDialog):
         )
 
         layout.addWidget(button_box)
+
+    @staticmethod
+    def _create_x_icon(color: str) -> str:
+        """Create a small X mark icon and return the file path."""
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(QColor(0, 0, 0, 0))
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(QColor(color))
+        pen.setWidth(2)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        painter.drawLine(4, 4, 11, 11)
+        painter.drawLine(11, 4, 4, 11)
+        painter.end()
+        path = tempfile.gettempdir() + "/mynotion_check_x.png"
+        pixmap.save(path)
+        return path.replace("\\", "/")
 
     @staticmethod
     def _hex_to_rgba(hex_color: str, alpha: float) -> str:
@@ -247,6 +281,25 @@ class SettingsDialog(QDialog):
             QDialogButtonBox QPushButton {{
                 min-width: 70px;
             }}
+            QCheckBox {{
+                color: {fg};
+                spacing: 8px;
+            }}
+            QCheckBox::indicator {{
+                width: 16px;
+                height: 16px;
+                border: 1px solid {chrome_border};
+                border-radius: 3px;
+                background-color: {bg};
+            }}
+            QCheckBox::indicator:hover {{
+                border-color: {accent};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {bg};
+                border-color: {accent};
+                image: url({self._create_x_icon(accent)});
+            }}
         """)
 
     def _load_settings(self):
@@ -279,6 +332,13 @@ class SettingsDialog(QDialog):
 
         # API Keys
         self.anthropic_key_edit.setText(self.settings.get_anthropic_api_key())
+
+        # Auto-Save
+        self.autosave_checkbox.setChecked(self.settings.get_auto_save_enabled())
+        interval = str(self.settings.get_auto_save_interval())
+        idx = self.autosave_interval_combo.findText(interval)
+        if idx >= 0:
+            self.autosave_interval_combo.setCurrentIndex(idx)
 
         self._updating = False
         self._update_preview()
@@ -337,6 +397,14 @@ class SettingsDialog(QDialog):
 
         # Save API keys
         self.settings.set_anthropic_api_key(self.anthropic_key_edit.text())
+
+        # Save auto-save settings
+        self.settings.set_auto_save_enabled(self.autosave_checkbox.isChecked())
+        try:
+            interval = int(self.autosave_interval_combo.currentText())
+        except (ValueError, TypeError):
+            interval = 30
+        self.settings.set_auto_save_interval(interval)
 
         self.settings_changed.emit()
 
