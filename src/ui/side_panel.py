@@ -40,6 +40,7 @@ class LayoutMode(Enum):
 # ─── Data ───
 MODELS = [
     {"id": "qwen2.5:7b-instruct-q4_0", "name": "Qwen 2.5", "tag": "7B"},
+    {"id": "deepseek-coder:1.3b", "name": "DeepSeek Coder", "tag": "1.3B"},
     {"id": "llama3.2:latest", "name": "Llama 3.2", "tag": "3B"},
     {"id": "gemma3:4b", "name": "Gemma 3", "tag": "4B"},
     {"id": "mistral:7b-instruct-q4_0", "name": "Mistral", "tag": "7B"},
