@@ -2,28 +2,15 @@
 
 ## Next Up (Priority)
 
-- [ ] **Line-level Code Completion (Copilot-style)** - Inline AI code suggestions
-  - **Model**: deepseek-coder:1.3b via Ollama (`ollama pull deepseek-coder:1.3b`)
-  - **Default: OFF** — user opts in via Settings or Ctrl+Shift+Space toggle
-  - **On/Off toggle**:
-    - Settings dialog: Checkbox "Enable AI code suggestions"
-    - Quick toggle: Ctrl+Shift+Space
-    - Status bar indicator: ◈ (active) / ◇ (off)
-  - **Triggers**: Enter (new line), 600ms pause at end of line, `:` after def/class/if/for/while
-  - **FIM format**: `<｜fim▁begin｜>{100 lines above}<｜fim▁hole｜>{20 lines below}<｜fim▁end｜>`
-  - **Ghost text**: dimmed rgba(180,210,190,0.35), drawn via paintEvent QPainter overlay
-  - **Accept/dismiss**: Tab (accept all), Ctrl+→ (accept one line), typing/Esc (dismiss)
-  - **Settings**: Enable checkbox (default off), delay slider 200–1000ms, max lines slider 1–10
-  - **Implementation**:
-    - New file: `src/ai/completion.py` — async CompletionManager (no threads, 10s timeout)
-    - Modify: `src/ai/providers/ollama.py` — add `raw=True` param for FIM
-    - Modify: `src/core/settings.py` — 3 new settings (enabled, delay, max_lines)
-    - Modify: `src/ui/editor_tab.py` — ghost text rendering, trigger logic, keyPressEvent
-    - Modify: `src/ui/settings_dialog.py` — checkbox + sliders UI group
-    - Modify: `src/ui/main_window.py` — status bar indicator, Ctrl+Shift+Space shortcut
-    - New file: `tests/test_completion.py`
+- [x] **Line-level Code Completion (Copilot-style)** - Inline AI code suggestions
+  - FIM-based ghost text via Ollama (DeepSeek Coder 1.3B / Qwen 2.5 Coder 1.5B / CodeGemma 2B)
+  - Toggle: ◈/◇ icon in header bar (left-click), right-click for model selection
+  - Ctrl+Shift+Space shortcut, Settings dialog with enable/model/delay/max lines
+  - Tab to accept, Ctrl+→ accept one line, Esc to dismiss
+  - Response cleaning: trims at code boundaries, caps lines and characters
+  - 27 tests covering FIM prompt, context extraction, response cleaning, and manager
 
-- [ ] **Create GitHub release for v0.2.0** - Publish release notes on GitHub
+- [x] **Create GitHub release for v0.2.0** - Publish release notes on GitHub
   - Use `gh release create v0.2.0` with changelog (packaging, editor fixes, AI tests)
 
 - [ ] **Align AI prompts with model selector** - Fine-tune left-alignment of "AI Prompts" toggle and model selector text
@@ -33,6 +20,13 @@
 
 ## Recently Completed
 
+- [x] **Line-level Code Completion** - Copilot-style inline AI code suggestions
+  - Ghost text rendered via QPainter overlay in editor
+  - FIM prompts via Ollama with `raw=True`, async (no threads)
+  - 3 model choices: DeepSeek Coder 1.3B, Qwen 2.5 Coder 1.5B, CodeGemma 2B
+  - Header bar toggle icon with right-click model picker
+  - Settings: enable, model, delay (200–1000ms), max lines (1–10)
+  - Dead code cleanup: removed unused side panel shortcuts/constants
 
 - [x] **Startup theme flash fixed** - Editor panel no longer flashes wrong background on launch
   - Moved `_apply_theme()` to after all UI widgets are constructed
@@ -218,7 +212,7 @@
   - [x] Continue generating feature
   - [x] Stop generation button
   - [x] Default system prompt for better responses
-  - [ ] Text completion/suggestions
+  - [x] Text completion/suggestions
 
 - [x] **Layout Modes** - Coding Mode and Writing Mode with different AI prompts
   - Coding Mode: Explain, Docstring, Simplify, Debug, Fix, Refactor, Test

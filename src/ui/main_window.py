@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ai.completion import CompletionManager
 from core.recent_files import RecentFilesManager
 from core.settings import SettingsManager
 from syntax.highlighter import Language
@@ -46,6 +47,13 @@ from ui.find_replace import FindReplaceBar
 from ui.settings_dialog import SettingsDialog
 from ui.side_panel import LayoutMode, SidePanel
 from ui.toolbar_widgets import FormattingToolbar
+
+# Models available for code completion (small, fast FIM models)
+COMPLETION_MODELS = [
+    {"id": "deepseek-coder:1.3b", "name": "DeepSeek Coder 1.3B"},
+    {"id": "qwen2.5-coder:1.5b", "name": "Qwen 2.5 Coder 1.5B"},
+    {"id": "codegemma:2b", "name": "CodeGemma 2B"},
+]
 
 
 class MainWindow(QMainWindow):
@@ -62,6 +70,7 @@ class MainWindow(QMainWindow):
         self._setup_menus()
         self._setup_toolbar()
         self._setup_statusbar()
+        self._setup_completion()
         self._apply_theme()
         self._apply_child_themes()
         self._restore_geometry()
@@ -769,6 +778,13 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(self.formatting_toolbar)
         header_layout.addStretch(1)
 
+        # AI completion toggle (top-right)
+        self.completion_label = QLabel("◇")
+        self.completion_label.setToolTip(self.tr("AI Code Completion (Ctrl+Shift+Space)"))
+        self.completion_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.completion_label.mousePressEvent = self._on_completion_label_click
+        header_layout.addWidget(self.completion_label)
+
         self.setMenuWidget(self._header_widget)
 
         # Connect signals
@@ -810,6 +826,121 @@ class MainWindow(QMainWindow):
         # Encoding indicator
         self.encoding_label = QLabel("UTF-8")
         self.statusbar.addPermanentWidget(self.encoding_label)
+
+    def _setup_completion(self):
+        """Initialize the AI code completion system."""
+        self._completion_manager = CompletionManager(self)
+        self._completion_manager.suggestion_ready.connect(self._on_suggestion_ready)
+
+        # Shortcut: Ctrl+Shift+Space to toggle completion
+        toggle_completion = QAction(self.tr("Toggle Code Completion"), self)
+        toggle_completion.setShortcut(QKeySequence("Ctrl+Shift+Space"))
+        toggle_completion.triggered.connect(self._toggle_completion)
+        self.addAction(toggle_completion)
+
+        # Load saved state
+        enabled = self.settings_manager.get_completion_enabled()
+        self._completion_manager.set_enabled(enabled)
+        self._completion_manager.set_max_lines(self.settings_manager.get_completion_max_lines())
+        self._update_completion_indicator()
+
+    def _toggle_completion(self):
+        """Toggle AI code completion on/off."""
+        enabled = not self._completion_manager.is_enabled()
+        self._completion_manager.set_enabled(enabled)
+        self.settings_manager.set_completion_enabled(enabled)
+
+        # Update current editor
+        editor = self.current_editor()
+        if editor:
+            editor.set_completion_enabled(enabled)
+            if enabled:
+                delay = self.settings_manager.get_completion_delay()
+                editor.set_completion_delay(delay)
+
+        self._update_completion_indicator()
+
+    def _update_completion_indicator(self):
+        """Update the status bar completion icon and tooltip."""
+        if not hasattr(self, "completion_label"):
+            return
+        theme = self.settings_manager.get_current_theme()
+        enabled = self._completion_manager.is_enabled()
+        model = self.settings_manager.get_completion_model()
+
+        fg = theme.foreground
+        if enabled:
+            self.completion_label.setText("◈")
+            self.completion_label.setToolTip(self.tr(f"AI Code Completion: ON — {model}"))
+            self.completion_label.setStyleSheet(
+                f"color: {theme.keyword}; font-size: 16px; padding: 4px 12px 4px 6px;"
+            )
+        else:
+            self.completion_label.setText("◇")
+            self.completion_label.setToolTip(self.tr("AI Code Completion (Ctrl+Shift+Space)"))
+            self.completion_label.setStyleSheet(
+                f"color: {self._hex_to_rgba(fg, 0.4)}; font-size: 16px; padding: 4px 12px 4px 6px;"
+            )
+
+    def _on_completion_label_click(self, event):
+        """Handle clicks on the completion status bar icon."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._toggle_completion()
+        elif event.button() == Qt.MouseButton.RightButton:
+            self._show_completion_model_menu(event)
+
+    def _show_completion_model_menu(self, event):
+        """Show a popup menu to select the completion model."""
+        from PyQt6.QtWidgets import QMenu
+
+        menu = QMenu(self)
+        current_model = self.settings_manager.get_completion_model()
+
+        for model_info in COMPLETION_MODELS:
+            action = QAction(model_info["name"], self)
+            action.setCheckable(True)
+            action.setChecked(model_info["id"] == current_model)
+            action.setData(model_info["id"])
+            action.triggered.connect(self._on_completion_model_selected)
+            menu.addAction(action)
+
+        menu.exec(self.completion_label.mapToGlobal(event.pos()))
+
+    def _on_completion_model_selected(self):
+        """Handle completion model selection from popup menu."""
+        action = self.sender()
+        if action:
+            model_id = action.data()
+            self.settings_manager.set_completion_model(model_id)
+            self._update_completion_indicator()
+
+    def _on_suggestion_ready(self, text: str):
+        """Handle a completion suggestion from the CompletionManager."""
+        editor = self.current_editor()
+        if editor and self._completion_manager.is_enabled():
+            editor.set_ghost_text(text)
+
+    def _connect_completion_to_editor(self, editor: EditorTab):
+        """Wire completion signals for the given editor."""
+        enabled = self._completion_manager.is_enabled()
+        editor.set_completion_enabled(enabled)
+        if enabled:
+            editor.set_completion_delay(self.settings_manager.get_completion_delay())
+        editor.completion_requested.connect(self._on_editor_completion_requested)
+
+    def _disconnect_completion_from_editor(self, editor: EditorTab):
+        """Disconnect completion signals from an editor."""
+        import contextlib
+
+        with contextlib.suppress(TypeError):
+            editor.completion_requested.disconnect(self._on_editor_completion_requested)
+        editor.clear_ghost_text()
+        editor.set_completion_enabled(False)
+
+    def _on_editor_completion_requested(self, prefix: str, suffix: str):
+        """Forward editor's completion request to the CompletionManager."""
+        model = self.settings_manager.get_completion_model()
+        self._completion_manager.request_completion(prefix, suffix, model)
 
     def _restore_geometry(self):
         """Restore window geometry from settings."""
@@ -970,10 +1101,17 @@ class MainWindow(QMainWindow):
 
     def _on_tab_changed(self, index: int):
         """Handle tab change to update status bar with fade transition."""
+        # Cancel any pending completion from previous tab
+        if hasattr(self, "_completion_manager"):
+            self._completion_manager.cancel()
+
         editor = self.current_editor()
         if editor:
             self._update_language_indicator(editor.language)
             self._connect_editor_signals(editor)
+            # Wire completion to new tab
+            if hasattr(self, "_completion_manager"):
+                self._connect_completion_to_editor(editor)
             # Update find bar's editor reference
             self.find_bar.set_editor(editor)
             # Apply fade-in transition
@@ -1161,6 +1299,9 @@ class MainWindow(QMainWindow):
         index = self.tab_widget.addTab(editor, self.tr("Untitled"))
         self.tab_widget.setCurrentIndex(index)
         self._connect_editor_signals(editor)
+        # Wire completion for new tab
+        if hasattr(self, "_completion_manager"):
+            self._connect_completion_to_editor(editor)
         # Track document modifications for unsaved indicator
         editor.document().modificationChanged.connect(
             lambda modified: self._on_document_modified(editor, modified)
@@ -1334,6 +1475,17 @@ class MainWindow(QMainWindow):
         self._apply_child_themes()
         self._update_status_bar()
         self._start_auto_save_timer()
+
+        # Refresh completion settings
+        if hasattr(self, "_completion_manager"):
+            enabled = self.settings_manager.get_completion_enabled()
+            self._completion_manager.set_enabled(enabled)
+            self._completion_manager.set_max_lines(self.settings_manager.get_completion_max_lines())
+            editor = self.current_editor()
+            if editor:
+                editor.set_completion_enabled(enabled)
+                editor.set_completion_delay(self.settings_manager.get_completion_delay())
+            self._update_completion_indicator()
 
     # Formatting - inserts markdown syntax for plain text
     def _toggle_bold(self):

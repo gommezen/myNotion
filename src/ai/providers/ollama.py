@@ -123,6 +123,43 @@ class OllamaClient:
             logger.exception("Ollama API error")
             yield f"[Error: {e}]"
 
+    async def generate_fim(
+        self,
+        model: str,
+        prompt: str,
+        timeout: float = 10.0,
+    ) -> str:
+        """Generate FIM (fill-in-middle) completion, non-streaming.
+
+        Args:
+            model: Model name (e.g., "deepseek-coder:1.3b")
+            prompt: Raw FIM prompt with special tokens
+            timeout: Request timeout in seconds
+
+        Returns:
+            Completed text, or empty string on failure.
+        """
+        url = f"{self.host}/api/generate"
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "raw": True,
+            "stream": False,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url, json=payload)
+                if response.status_code != 200:
+                    return ""
+                data = response.json()
+                return data.get("response", "")
+        except (httpx.ConnectError, httpx.TimeoutException):
+            return ""
+        except Exception:
+            logger.exception("Ollama FIM API error")
+            return ""
+
     async def chat(
         self,
         model: str,

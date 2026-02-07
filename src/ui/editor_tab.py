@@ -2,7 +2,7 @@
 Editor tab widget - handles individual document editing.
 """
 
-from PyQt6.QtCore import QRect, QSize, Qt
+from PyQt6.QtCore import QRect, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QFontDatabase, QPainter, QTextFormat
 from PyQt6.QtWidgets import QPlainTextEdit, QTextEdit, QWidget
 
@@ -33,6 +33,9 @@ class LineNumberArea(QWidget):
 class EditorTab(QPlainTextEdit):
     """A single editor tab for text/code editing with syntax highlighting."""
 
+    # Emitted when the editor wants a completion (prefix, suffix)
+    completion_requested = pyqtSignal(str, str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -50,6 +53,18 @@ class EditorTab(QPlainTextEdit):
         self._settings = SettingsManager()
         self._theme: EditorTheme = self._settings.get_current_theme()
         self._highlight_line = False  # Notepad-style: no line highlight, just cursor
+
+        # Ghost text (inline completion suggestions)
+        self._ghost_text: str = ""
+        self._ghost_text_line: int = -1
+        self._ghost_text_col: int = -1
+        self._completion_enabled = False
+
+        # Debounce timer for triggering completion requests
+        self._completion_timer = QTimer(self)
+        self._completion_timer.setSingleShot(True)
+        self._completion_timer.setInterval(600)
+        self._completion_timer.timeout.connect(self._request_completion)
 
         self._setup_editor()
         self._setup_line_numbers()
@@ -339,3 +354,143 @@ class EditorTab(QPlainTextEdit):
     def get_language_name(self) -> str:
         """Get the current language name for display."""
         return self.language.name.capitalize()
+
+    # ─── Ghost text (inline completion) ───
+
+    def set_completion_enabled(self, enabled: bool) -> None:
+        """Enable or disable the completion trigger timer."""
+        self._completion_enabled = enabled
+        if not enabled:
+            self._completion_timer.stop()
+            self.clear_ghost_text()
+
+    def set_completion_delay(self, delay_ms: int) -> None:
+        """Set the debounce delay for completion requests."""
+        self._completion_timer.setInterval(delay_ms)
+
+    def set_ghost_text(self, text: str) -> None:
+        """Show ghost text at the current cursor position."""
+        if not text:
+            self.clear_ghost_text()
+            return
+        cursor = self.textCursor()
+        self._ghost_text = text
+        self._ghost_text_line = cursor.blockNumber()
+        self._ghost_text_col = cursor.columnNumber()
+        self.viewport().update()
+
+    def clear_ghost_text(self) -> None:
+        """Remove any visible ghost text."""
+        if self._ghost_text:
+            self._ghost_text = ""
+            self._ghost_text_line = -1
+            self._ghost_text_col = -1
+            self.viewport().update()
+
+    def has_ghost_text(self) -> bool:
+        """Check if ghost text is currently displayed."""
+        return bool(self._ghost_text)
+
+    def _accept_ghost_text(self, first_line_only: bool = False) -> None:
+        """Insert ghost text into the document."""
+        if not self._ghost_text:
+            return
+
+        text_to_insert = self._ghost_text
+        if first_line_only:
+            text_to_insert = self._ghost_text.split("\n")[0]
+
+        cursor = self.textCursor()
+        cursor.insertText(text_to_insert)
+        self.setTextCursor(cursor)
+        self.clear_ghost_text()
+
+    def _request_completion(self) -> None:
+        """Build prefix/suffix from cursor position and emit completion_requested."""
+        if not self._completion_enabled:
+            return
+
+        from ai.completion import extract_context
+
+        cursor = self.textCursor()
+        text = self.toPlainText()
+        prefix, suffix = extract_context(text, cursor.blockNumber(), cursor.columnNumber())
+
+        # Only request if there's meaningful prefix content
+        if prefix.strip():
+            self.completion_requested.emit(prefix, suffix)
+
+    def keyPressEvent(self, event) -> None:
+        """Handle key presses for ghost text accept/dismiss and completion triggers."""
+        # Tab: accept ghost text
+        if event.key() == Qt.Key.Key_Tab and self.has_ghost_text():
+            self._accept_ghost_text()
+            return
+
+        # Ctrl+Right: accept first line of ghost text
+        if (
+            event.key() == Qt.Key.Key_Right
+            and event.modifiers() & Qt.KeyboardModifier.ControlModifier
+            and self.has_ghost_text()
+        ):
+            self._accept_ghost_text(first_line_only=True)
+            return
+
+        # Escape: dismiss ghost text
+        if event.key() == Qt.Key.Key_Escape and self.has_ghost_text():
+            self.clear_ghost_text()
+            return
+
+        # Any other key clears ghost text and restarts the timer
+        if self.has_ghost_text():
+            self.clear_ghost_text()
+
+        # Let the default handler process the key
+        super().keyPressEvent(event)
+
+        # Restart completion timer on text-modifying keys
+        if self._completion_enabled and event.text():
+            self._completion_timer.start()
+
+    def paintEvent(self, event) -> None:
+        """Paint the editor, then overlay ghost text if present."""
+        super().paintEvent(event)
+
+        if not self._ghost_text or self._ghost_text_line < 0:
+            return
+
+        # Find the block where ghost text should appear
+        block = self.document().findBlockByNumber(self._ghost_text_line)
+        if not block.isValid():
+            return
+
+        # Get block geometry in viewport coordinates
+        geom = self.blockBoundingGeometry(block).translated(self.contentOffset())
+        block_top = int(geom.top())
+        line_height = int(self.blockBoundingRect(block).height())
+
+        # Calculate x position: after the ghost_text_col characters
+        block_text = block.text()
+        prefix_on_line = block_text[: self._ghost_text_col]
+        x_offset = self.fontMetrics().horizontalAdvance(prefix_on_line)
+
+        # Account for document margin
+        x_offset += int(self.document().documentMargin())
+
+        painter = QPainter(self.viewport())
+        ghost_color = QColor(180, 210, 190, 90)  # rgba(180,210,190,0.35)
+        painter.setPen(ghost_color)
+        painter.setFont(self.font())
+
+        ghost_lines = self._ghost_text.split("\n")
+        for i, line in enumerate(ghost_lines):
+            y = block_top + (i * line_height) + self.fontMetrics().ascent()
+            if i == 0:
+                # First line: draw after cursor position
+                painter.drawText(x_offset, y, line)
+            else:
+                # Subsequent lines: draw from left margin
+                x = int(self.document().documentMargin())
+                painter.drawText(x, y, line)
+
+        painter.end()

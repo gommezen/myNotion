@@ -208,12 +208,6 @@ AI_PROMPTS = [
     },
 ]
 
-CONTEXT_MODES = [
-    {"id": "selection", "label": "Selection"},
-    {"id": "file", "label": "Full file"},
-    {"id": "project", "label": "Project"},
-]
-
 
 class SidePanel(QWidget):
     """AI Chat Panel with Metropolis Art Deco aesthetic."""
@@ -249,9 +243,6 @@ class SidePanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-
-        # Keep context_buttons as empty list for compatibility
-        self.context_buttons: list[QPushButton] = []
 
         # ─── Chat area ───
         self.chat_area = QTextBrowser()

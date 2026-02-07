@@ -20,6 +20,13 @@ from PyQt6.QtWidgets import (
 
 from core.settings import THEMES, SettingsManager
 
+# Models available for code completion
+COMPLETION_MODELS = [
+    {"id": "deepseek-coder:1.3b", "name": "DeepSeek Coder 1.3B"},
+    {"id": "qwen2.5-coder:1.5b", "name": "Qwen 2.5 Coder 1.5B"},
+    {"id": "codegemma:2b", "name": "CodeGemma 2B"},
+]
+
 # Common font sizes for the dropdown (starting at 10)
 FONT_SIZES = [10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 32, 36, 42, 48, 56, 64, 72]
 
@@ -138,6 +145,28 @@ class SettingsDialog(QDialog):
         autosave_layout.addRow("Interval (seconds):", self.autosave_interval_combo)
 
         layout.addWidget(autosave_group)
+
+        # Code Completion group
+        completion_group = QGroupBox("Code Completion")
+        completion_layout = QFormLayout(completion_group)
+
+        self.completion_checkbox = QCheckBox("Enable AI code suggestions")
+        completion_layout.addRow(self.completion_checkbox)
+
+        self.completion_model_combo = QComboBox()
+        for model in COMPLETION_MODELS:
+            self.completion_model_combo.addItem(model["name"], model["id"])
+        completion_layout.addRow("Model:", self.completion_model_combo)
+
+        self.completion_delay_combo = QComboBox()
+        self.completion_delay_combo.addItems(["200", "400", "600", "800", "1000"])
+        completion_layout.addRow("Delay (ms):", self.completion_delay_combo)
+
+        self.completion_max_lines_combo = QComboBox()
+        self.completion_max_lines_combo.addItems([str(i) for i in range(1, 11)])
+        completion_layout.addRow("Max lines:", self.completion_max_lines_combo)
+
+        layout.addWidget(completion_group)
 
         # Preview
         preview_group = QGroupBox("Preview")
@@ -340,6 +369,18 @@ class SettingsDialog(QDialog):
         if idx >= 0:
             self.autosave_interval_combo.setCurrentIndex(idx)
 
+        # Code Completion
+        self.completion_checkbox.setChecked(self.settings.get_completion_enabled())
+        model_id = self.settings.get_completion_model()
+        for i in range(self.completion_model_combo.count()):
+            if self.completion_model_combo.itemData(i) == model_id:
+                self.completion_model_combo.setCurrentIndex(i)
+                break
+        self.completion_delay_combo.setCurrentText(str(self.settings.get_completion_delay()))
+        self.completion_max_lines_combo.setCurrentText(
+            str(self.settings.get_completion_max_lines())
+        )
+
         self._updating = False
         self._update_preview()
 
@@ -405,6 +446,22 @@ class SettingsDialog(QDialog):
         except (ValueError, TypeError):
             interval = 30
         self.settings.set_auto_save_interval(interval)
+
+        # Save code completion settings
+        self.settings.set_completion_enabled(self.completion_checkbox.isChecked())
+        model_id = self.completion_model_combo.currentData()
+        if model_id:
+            self.settings.set_completion_model(model_id)
+        try:
+            delay = int(self.completion_delay_combo.currentText())
+        except (ValueError, TypeError):
+            delay = 600
+        self.settings.set_completion_delay(delay)
+        try:
+            max_lines = int(self.completion_max_lines_combo.currentText())
+        except (ValueError, TypeError):
+            max_lines = 3
+        self.settings.set_completion_max_lines(max_lines)
 
         self.settings_changed.emit()
 

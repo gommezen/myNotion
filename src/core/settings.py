@@ -213,17 +213,6 @@ class SettingsManager:
         """Save side panel visibility state."""
         self.settings.setValue("side_panel_visible", visible)
 
-    def get_side_panel_shortcuts(self) -> list[dict]:
-        """Get user-configured shortcuts."""
-        value = self.settings.value("side_panel_shortcuts")
-        if value is None:
-            return []
-        return value
-
-    def set_side_panel_shortcuts(self, shortcuts: list[dict]):
-        """Save user-configured shortcuts."""
-        self.settings.setValue("side_panel_shortcuts", shortcuts)
-
     def get_layout_mode(self) -> str:
         """Get the current layout mode (coding or writing)."""
         return self.settings.value("layout_mode", "coding")
@@ -282,3 +271,44 @@ class SettingsManager:
     def set_auto_save_interval(self, seconds: int):
         """Set auto-save interval in seconds."""
         self.settings.setValue("auto_save_interval", max(5, min(300, seconds)))
+
+    # Code completion settings
+    def get_completion_enabled(self) -> bool:
+        """Get whether AI code completion is enabled."""
+        return self.settings.value("completion_enabled", False, type=bool)
+
+    def set_completion_enabled(self, enabled: bool):
+        """Set whether AI code completion is enabled."""
+        self.settings.setValue("completion_enabled", enabled)
+
+    def get_completion_model(self) -> str:
+        """Get the model used for code completion."""
+        return self.settings.value("completion_model", "deepseek-coder:1.3b")
+
+    def set_completion_model(self, model: str):
+        """Set the model used for code completion."""
+        self.settings.setValue("completion_model", model)
+
+    def get_completion_delay(self) -> int:
+        """Get completion trigger delay in milliseconds."""
+        try:
+            delay = self.settings.value("completion_delay", 600, type=int)
+            return max(200, min(1000, delay))
+        except (ValueError, TypeError):
+            return 600
+
+    def set_completion_delay(self, delay: int):
+        """Set completion trigger delay in milliseconds."""
+        self.settings.setValue("completion_delay", max(200, min(1000, delay)))
+
+    def get_completion_max_lines(self) -> int:
+        """Get maximum lines for completion suggestions."""
+        try:
+            lines = self.settings.value("completion_max_lines", 3, type=int)
+            return max(1, min(10, lines))
+        except (ValueError, TypeError):
+            return 3
+
+    def set_completion_max_lines(self, lines: int):
+        """Set maximum lines for completion suggestions."""
+        self.settings.setValue("completion_max_lines", max(1, min(10, lines)))
