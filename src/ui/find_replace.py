@@ -13,6 +13,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from core.settings import SettingsManager
+
 
 class FindReplaceBar(QWidget):
     """Horizontal bar for find and replace functionality."""
@@ -23,6 +25,7 @@ class FindReplaceBar(QWidget):
         super().__init__(parent)
         self._editor = None
         self._last_search = ""
+        self._settings = SettingsManager()
         self._setup_ui()
         self._apply_style()
 
@@ -106,14 +109,33 @@ class FindReplaceBar(QWidget):
         self.close_btn.clicked.connect(self.hide_bar)
         layout.addWidget(self.close_btn)
 
+    @staticmethod
+    def _hex_to_rgba(hex_color: str, alpha: float) -> str:
+        """Convert hex color to rgba() CSS string."""
+        h = hex_color.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+
     def _apply_style(self):
-        """Apply Metropolis theme styling."""
-        bg = "#121f1f"
-        text = "#c8e0ce"
-        text_dim = "rgba(180, 210, 190, 0.6)"
-        border = "#2a4a4a"
-        input_bg = "#1a2a2a"
-        accent = "#d4a84b"
+        """Apply current theme styling."""
+        theme = self._settings.get_current_theme()
+        bg = theme.chrome_bg
+        text = theme.foreground
+        text_dim = self._hex_to_rgba(theme.foreground, 0.6)
+        border = theme.chrome_border
+        input_bg = theme.background
+        accent = theme.keyword
+        radius = theme.radius
+
+        # Win95: explicit per-side beveled borders
+        if theme.is_beveled:
+            input_border = theme.bevel_sunken
+            input_border_focus = theme.bevel_sunken
+            btn_border = theme.bevel_raised
+        else:
+            input_border = f"border: 1px solid {border};"
+            input_border_focus = f"border: 1px solid {accent};"
+            btn_border = f"border: 1px solid {border};"
 
         self.setStyleSheet(f"""
             QWidget {{
@@ -128,18 +150,18 @@ class FindReplaceBar(QWidget):
             QLineEdit {{
                 background-color: {input_bg};
                 color: {text};
-                border: 1px solid {border};
-                border-radius: 3px;
+                {input_border}
+                border-radius: {radius};
                 padding: 4px 8px;
             }}
             QLineEdit:focus {{
-                border: 1px solid {accent};
+                {input_border_focus}
             }}
             QPushButton {{
                 background-color: transparent;
                 color: {text_dim};
-                border: 1px solid {border};
-                border-radius: 3px;
+                {btn_border}
+                border-radius: {radius};
                 padding: 4px 10px;
             }}
             QPushButton:hover {{
@@ -147,7 +169,7 @@ class FindReplaceBar(QWidget):
                 color: {text};
             }}
             QPushButton:pressed {{
-                background-color: #0d1a1a;
+                background-color: {theme.selection};
             }}
             QCheckBox {{
                 color: {text_dim};
@@ -156,8 +178,8 @@ class FindReplaceBar(QWidget):
             QCheckBox::indicator {{
                 width: 14px;
                 height: 14px;
-                border: 1px solid {border};
-                border-radius: 2px;
+                {input_border}
+                border-radius: {radius};
                 background-color: {input_bg};
             }}
             QCheckBox::indicator:checked {{
@@ -165,6 +187,11 @@ class FindReplaceBar(QWidget):
                 border-color: {accent};
             }}
         """)
+
+    def apply_theme(self):
+        """Public method for external theme updates."""
+        self._settings = SettingsManager()
+        self._apply_style()
 
     def set_editor(self, editor):
         """Set the editor to search in."""

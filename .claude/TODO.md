@@ -2,8 +2,8 @@
 
 ## Next Up
 
+- [ ] **Polish settings menu** — Apply consistent border-radius (6px), button pressed states (gold accent), and theme-aware styling to the settings dialog
 - [ ] **Win95 Dark theme review** — Run `python src/main.py`, switch to Win95 Dark, compare against the playground (`mynotion-theme-playground.html`)
-
 
 ## Refactoring
 

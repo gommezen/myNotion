@@ -236,6 +236,19 @@ class SettingsDialog(QDialog):
         chrome_border = theme.chrome_border
         accent = theme.keyword
         selection = theme.selection
+        radius = theme.radius
+
+        # Win95: explicit per-side beveled borders
+        if theme.is_beveled:
+            group_border = theme.bevel_flat
+            input_border = theme.bevel_sunken
+            btn_border = theme.bevel_raised
+            check_border = theme.bevel_sunken
+        else:
+            group_border = f"border: 1px solid {chrome_border};"
+            input_border = f"border: 1px solid {chrome_border};"
+            btn_border = "border: none;"
+            check_border = f"border: 1px solid {chrome_border};"
 
         self.setStyleSheet(f"""
             QDialog {{
@@ -244,8 +257,8 @@ class SettingsDialog(QDialog):
             }}
             QGroupBox {{
                 color: {fg};
-                border: 1px solid {chrome_border};
-                border-radius: 4px;
+                {group_border}
+                border-radius: {radius};
                 margin-top: 8px;
                 padding-top: 8px;
             }}
@@ -257,8 +270,8 @@ class SettingsDialog(QDialog):
             QComboBox {{
                 background-color: {bg};
                 color: {fg};
-                border: 1px solid {chrome_border};
-                border-radius: 3px;
+                {input_border}
+                border-radius: {radius};
                 padding: 4px 8px;
                 min-height: 20px;
                 min-width: 150px;
@@ -282,8 +295,8 @@ class SettingsDialog(QDialog):
             QLineEdit {{
                 background-color: {bg};
                 color: {fg};
-                border: 1px solid {chrome_border};
-                border-radius: 3px;
+                {input_border}
+                border-radius: {radius};
                 padding: 4px 8px;
                 min-height: 20px;
             }}
@@ -296,8 +309,8 @@ class SettingsDialog(QDialog):
             QPushButton {{
                 background-color: {self._hex_to_rgba(accent, 0.8)};
                 color: {fg};
-                border: none;
-                border-radius: 3px;
+                {btn_border}
+                border-radius: {radius};
                 padding: 6px 16px;
                 min-width: 80px;
             }}
@@ -317,8 +330,8 @@ class SettingsDialog(QDialog):
             QCheckBox::indicator {{
                 width: 16px;
                 height: 16px;
-                border: 1px solid {chrome_border};
-                border-radius: 3px;
+                {check_border}
+                border-radius: {radius};
                 background-color: {bg};
             }}
             QCheckBox::indicator:hover {{
@@ -413,13 +426,16 @@ class SettingsDialog(QDialog):
             font.setPointSize(size)
         self.preview_edit.setFont(font)
 
+        preview_border = (
+            theme.bevel_sunken if theme.is_beveled else f"border: 1px solid {theme.chrome_border};"
+        )
         self.preview_edit.setStyleSheet(f"""
             QPlainTextEdit {{
                 background-color: {theme.background};
                 color: {theme.foreground};
                 selection-background-color: {theme.selection};
-                border: 1px solid {theme.chrome_border};
-                border-radius: 3px;
+                {preview_border}
+                border-radius: {theme.radius};
             }}
         """)
 

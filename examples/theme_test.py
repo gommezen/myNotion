@@ -6,20 +6,73 @@ Docstring - also a string in light mint (#A8D8D0)
 Multi-line strings use the same color.
 """
 
-import os  # keyword 'import' in gold (#D4A84B)
-from typing import List, Optional  # keywords in gold
+# Import the necessary modules for file system operations and data types
+import os
 
+# Specify the types of variables that may or may not be present
+from typing import List, Optional
 
-# Decorator - should be red accent (#C45C5C)
-@dataclass
+def main() -> None:
+    # Perform some operation on the files in the current directory
+    for filename in os.listdir():
+        if os.path.isfile(filename):
+            print(f"Processing file: {filename}")
+
+def main():
+    """Main function to execute the program."""
+
+#expla****************in this code
+
+if __name__ == "__main__":
+    # This is the entry point for the script when it is run directly.
+    # Run main function if this is the main module
+    main()
+
+@def add(a, b):
+    """
+    Add two numbers.
+    
+    Parameters:
+        a (int): First number to add.
+        b (int): Second number to add.
+    
+    Returns:
+        int: Sum of a and b.
+    """
+    return a + b
+
+class Calculator:
+    """
+    A simple calculator class for adding numbers.
+    
+    Methods:
+        add(a, b): Add two numbers.
+    """
+    def add(self, a, b):
+        """
+        Add two numbers.
+        
+        Parameters:
+            a (int): First number to add.
+            b (int): Second number to add.
+        
+        Returns:
+            int: Sum of a and b.
+        """
+        return a + bdataclass
 @property
-def my_decorator(func):
+def my_decorator(func) -> None:
     pass
+
+my_decorator.__annotations__ = {"return": None}
+my_decorator._decorator_color = "#C45C5C"
+    
 
 
 # Class name - should be gold (#D4A84B)
 class MetropolisTheme:
     """A class to demonstrate syntax highlighting."""
+
 
     # Keywords: class, def, if, else, for, while, return, True, False, None
 

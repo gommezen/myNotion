@@ -60,6 +60,7 @@ pip-delete-this-directory.txt
 # OS
 .DS_Store
 Thumbs.db
+nul
 
 # Claude Code
 CLAUDE.md

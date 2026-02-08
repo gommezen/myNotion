@@ -16,6 +16,10 @@ class CloseButton(QPushButton):
         super().__init__(parent)
         self.setFixedSize(16, 16)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._apply_default_style()
+
+    def _apply_default_style(self):
+        """Apply default style (used before theme is available)."""
         self.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
@@ -25,6 +29,20 @@ class CloseButton(QPushButton):
             QPushButton:hover {
                 background-color: #E81123;
             }
+        """)
+
+    def apply_theme(self, theme):
+        """Apply theme-aware styling."""
+        radius = theme.radius
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                border: none;
+                border-radius: {radius};
+            }}
+            QPushButton:hover {{
+                background-color: #E81123;
+            }}
         """)
 
     def paintEvent(self, event):
@@ -78,6 +96,13 @@ class CustomTabBar(QTabBar):
                 with contextlib.suppress(TypeError):
                     btn.clicked.disconnect()
                 btn.clicked.connect(lambda checked, idx=i: self.tab_close_requested.emit(idx))
+
+    def apply_theme(self, theme):
+        """Apply theme to all close buttons."""
+        for i in range(self.count()):
+            btn = self.tabButton(i, QTabBar.ButtonPosition.RightSide)
+            if isinstance(btn, CloseButton):
+                btn.apply_theme(theme)
 
     def mouseDoubleClickEvent(self, event):
         """Double-click on empty area creates new tab."""

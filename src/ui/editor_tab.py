@@ -185,7 +185,7 @@ class EditorTab(QPlainTextEdit):
         painter.fillRect(event.rect(), QColor(self._theme.line_number_bg))
 
         # Line color for separators
-        line_color = QColor("#2a4a4a")
+        line_color = QColor(self._theme.chrome_border)
 
         # Draw line on LEFT edge - separates panel from line numbers
         painter.setPen(line_color)

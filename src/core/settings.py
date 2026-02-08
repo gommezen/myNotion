@@ -30,6 +30,55 @@ class EditorTheme:
     chrome_bg: str = ""
     chrome_hover: str = ""
     chrome_border: str = ""
+    # Style variant: "modern" (rounded corners) or "win95" (sharp + beveled)
+    style_variant: str = "modern"
+    # Win95 bevel edge colors (only used when style_variant == "win95")
+    bevel_light: str = ""
+    bevel_dark: str = ""
+
+    @property
+    def is_beveled(self) -> bool:
+        """True when the theme uses Win95-style 3D beveled borders."""
+        return self.style_variant == "win95"
+
+    @property
+    def radius(self) -> str:
+        """Small border-radius: 0px for Win95, 3px for modern."""
+        return "0px" if self.is_beveled else "3px"
+
+    @property
+    def radius_large(self) -> str:
+        """Large border-radius: 0px for Win95, 8px for modern."""
+        return "0px" if self.is_beveled else "8px"
+
+    @property
+    def bevel_raised(self) -> str:
+        """QSS for a Win95-style raised (3D outward) border."""
+        return (
+            f"border-top: 2px solid {self.bevel_light}; "
+            f"border-left: 2px solid {self.bevel_light}; "
+            f"border-bottom: 2px solid {self.bevel_dark}; "
+            f"border-right: 2px solid {self.bevel_dark};"
+        )
+
+    @property
+    def bevel_sunken(self) -> str:
+        """QSS for a Win95-style sunken (3D inward) border."""
+        return (
+            f"border-top: 2px solid {self.bevel_dark}; "
+            f"border-left: 2px solid {self.bevel_dark}; "
+            f"border-bottom: 2px solid {self.bevel_light}; "
+            f"border-right: 2px solid {self.bevel_light};"
+        )
+
+    @property
+    def bevel_flat(self) -> str:
+        """QSS for a Win95-style flat (subtle 3D) border for group boxes."""
+        return (
+            f"border: 1px solid {self.bevel_light}; "
+            f"border-top: 1px solid {self.bevel_dark}; "
+            f"border-left: 1px solid {self.bevel_dark};"
+        )
 
     def __post_init__(self):
         """Derive chrome colors from background if not explicitly set."""
@@ -47,6 +96,15 @@ class EditorTheme:
         r = min(255, int(hex_color[0:2], 16) + amount)
         g = min(255, int(hex_color[2:4], 16) + amount)
         b = min(255, int(hex_color[4:6], 16) + amount)
+        return f"#{r:02X}{g:02X}{b:02X}"
+
+    @staticmethod
+    def _darken(hex_color: str, amount: int) -> str:
+        """Darken a hex color by amount (0-255)."""
+        hex_color = hex_color.lstrip("#")
+        r = max(0, int(hex_color[0:2], 16) - amount)
+        g = max(0, int(hex_color[2:4], 16) - amount)
+        b = max(0, int(hex_color[4:6], 16) - amount)
         return f"#{r:02X}{g:02X}{b:02X}"
 
 
@@ -150,6 +208,28 @@ THEMES: dict[str, EditorTheme] = {
         chrome_bg="#121f1f",  # tab bar, status bar bg
         chrome_hover="#10191b",  # tab hover
         chrome_border="#1A3333",  # borders
+    ),
+    "Win95 Dark": EditorTheme(
+        name="Win95 Dark",
+        background="#1a2a2a",
+        foreground="#c8e0ce",
+        line_number_bg="#0a1212",
+        line_number_fg="#4a6a5a",
+        current_line="#243636",
+        selection="#2d4242",
+        keyword="#d4a84b",
+        string="#a8d8d0",
+        comment="#4a8080",
+        number="#e8c547",
+        function="#7fbfb5",
+        class_name="#d4a84b",
+        decorator="#a67c35",
+        chrome_bg="#0f1a1a",
+        chrome_hover="#243636",
+        chrome_border="#3a5252",
+        style_variant="win95",
+        bevel_light="#3a5252",
+        bevel_dark="#0a1414",
     ),
 }
 

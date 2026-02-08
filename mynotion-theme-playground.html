@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>MyNotion Theme Playground</title>
+<style>
+*{box-sizing:border-box;margin:0}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#111318;color:#ccc;display:flex;height:100vh;overflow:hidden}
+
+/* ---- Controls panel ---- */
+.controls{width:350px;min-width:350px;background:#161920;border-right:1px solid #2a2f3a;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:6px}
+.controls h1{font-size:15px;color:#d4a84b;margin-bottom:2px;letter-spacing:.5px}
+.controls .subtitle{font-size:11px;color:#6a6a6a;margin-bottom:8px}
+.controls h2{font-size:11px;color:#8a8a8a;text-transform:uppercase;letter-spacing:.8px;margin:14px 0 4px;padding-top:10px;border-top:1px solid #2a2f3a}
+.controls h2:first-of-type{border-top:none;margin-top:6px}
+
+.ctrl{display:flex;align-items:center;gap:8px;font-size:12px;min-height:28px}
+.ctrl label{flex:0 0 110px;color:#9aa0a6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctrl input[type=color]{width:32px;height:24px;border:1px solid #2a2f3a;border-radius:4px;background:transparent;cursor:pointer;padding:0;flex-shrink:0}
+.ctrl input[type=color]::-webkit-color-swatch-wrapper{padding:1px}
+.ctrl input[type=color]::-webkit-color-swatch{border:none;border-radius:3px}
+.ctrl input[type=range]{flex:1;accent-color:#d4a84b;height:4px}
+.ctrl .val{min-width:44px;text-align:right;color:#d4a84b;font-family:'Consolas',monospace;font-size:11px;user-select:all}
+
+/* Toggle switch */
+.toggle-row{display:flex;align-items:center;gap:8px;font-size:12px;min-height:28px}
+.toggle-row label{flex:0 0 110px;color:#9aa0a6}
+.toggle{position:relative;width:36px;height:20px;cursor:pointer}
+.toggle input{display:none}
+.toggle .slider{position:absolute;inset:0;background:#2a2f3a;border-radius:10px;transition:.2s}
+.toggle .slider::before{content:'';position:absolute;width:16px;height:16px;left:2px;top:2px;background:#666;border-radius:50%;transition:.2s}
+.toggle input:checked+.slider{background:#d4a84b}
+.toggle input:checked+.slider::before{transform:translateX(16px);background:#111}
+.toggle-label{font-size:11px;color:#d4a84b;font-family:'Consolas',monospace}
+
+/* Theme name input */
+.name-row{display:flex;gap:8px;align-items:center;margin:6px 0 4px}
+.name-row label{font-size:12px;color:#9aa0a6;flex:0 0 110px}
+.name-row input{flex:1;background:#1f2430;color:#e6e6e6;border:1px solid #2a2f3a;border-radius:4px;padding:5px 8px;font-size:12px}
+
+/* Presets */
+.presets{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 4px}
+.presets button{padding:4px 9px;border:1px solid #2a2f3a;border-radius:6px;background:#1f2430;color:#ccc;font-size:10px;cursor:pointer;transition:all .15s}
+.presets button:hover{border-color:#d4a84b;color:#d4a84b}
+.presets button.active{background:#d4a84b;color:#111;border-color:#d4a84b;font-weight:600}
+
+/* ---- Right panel ---- */
+.right{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.preview-wrap{flex:1;overflow-y:auto;padding:16px;background:#111318}
+.preview-frame{width:100%;max-width:960px;margin:0 auto}
+
+/* Output area */
+.output-area{background:#0d0f13;border-top:1px solid #2a2f3a;padding:12px 16px;display:flex;flex-direction:column;gap:8px;max-height:260px;min-height:120px}
+.output-area h3{font-size:11px;color:#8a8a8a;text-transform:uppercase;letter-spacing:.6px}
+.output-text{font-family:'Consolas',monospace;font-size:11px;color:#ccc;line-height:1.5;white-space:pre-wrap;overflow-y:auto;max-height:180px;padding:8px;background:#161920;border-radius:6px;border:1px solid #2a2f3a;tab-size:4}
+.copy-btn{align-self:flex-end;padding:5px 14px;border:1px solid #2a2f3a;border-radius:6px;background:#1f2430;color:#ccc;font-size:11px;cursor:pointer;transition:all .15s}
+.copy-btn:hover{border-color:#d4a84b;color:#d4a84b}
+.copy-btn.copied{background:#d4a84b;color:#111;border-color:#d4a84b}
+
+/* ---- Palette reference ---- */
+.mn-palette{margin-top:12px;padding:14px 10px 10px;position:relative;border:1px solid #2a2f3a;border-radius:6px}
+.mn-palette-label{position:absolute;top:-8px;left:10px;padding:0 6px;font-size:10px;font-weight:bold;background:#111318}
+.mn-palette-grid{display:flex;flex-wrap:wrap;gap:8px}
+.mn-swatch{display:flex;flex-direction:column;align-items:center;gap:3px}
+.mn-swatch-color{width:36px;height:22px;border:1px solid rgba(255,255,255,.1)}
+.mn-swatch-name{font-size:9px;color:#8a8a8a;font-family:'Consolas',monospace}
+.mn-swatch-val{font-size:8px;color:#666;font-family:'Consolas',monospace}
+</style>
+</head>
+<body>
+
+<!-- ============ CONTROLS ============ -->
+<div class="controls">
+  <h1>MyNotion Theme Playground</h1>
+  <div class="subtitle">Design &amp; export EditorTheme presets</div>
+
+  <h2>Presets</h2>
+  <div class="presets" id="presets"></div>
+
+  <div class="name-row">
+    <label>Theme Name</label>
+    <input type="text" id="themeName" value="Win95 Dark" oninput="state.themeName=this.value;updateAll()"/>
+  </div>
+
+  <h2>Window Style</h2>
+  <div class="toggle-row">
+    <label>3D Bevel</label>
+    <label class="toggle"><input type="checkbox" id="bevelToggle" onchange="state.bevel=this.checked;updateAll()"><span class="slider"></span></label>
+    <span class="toggle-label" id="bevelLabel">OFF</span>
+  </div>
+  <div class="ctrl"><label>Border Radius</label><input type="range" data-key="radius" min="0" max="14" step="1"><span class="val" data-val="radius"></span></div>
+  <div class="ctrl"><label>Bevel Light</label><input type="color" data-key="bevel_light"><span class="val" data-val="bevel_light"></span></div>
+  <div class="ctrl"><label>Bevel Dark</label><input type="color" data-key="bevel_dark"><span class="val" data-val="bevel_dark"></span></div>
+
+  <h2>Editor Colors</h2>
+  <div class="ctrl"><label>Background</label><input type="color" data-key="background"><span class="val" data-val="background"></span></div>
+  <div class="ctrl"><label>Foreground</label><input type="color" data-key="foreground"><span class="val" data-val="foreground"></span></div>
+  <div class="ctrl"><label>Line Num BG</label><input type="color" data-key="line_number_bg"><span class="val" data-val="line_number_bg"></span></div>
+  <div class="ctrl"><label>Line Num FG</label><input type="color" data-key="line_number_fg"><span class="val" data-val="line_number_fg"></span></div>
+  <div class="ctrl"><label>Current Line</label><input type="color" data-key="current_line"><span class="val" data-val="current_line"></span></div>
+  <div class="ctrl"><label>Selection</label><input type="color" data-key="selection"><span class="val" data-val="selection"></span></div>
+
+  <h2>Syntax Colors</h2>
+  <div class="ctrl"><label>Keyword</label><input type="color" data-key="keyword"><span class="val" data-val="keyword"></span></div>
+  <div class="ctrl"><label>String</label><input type="color" data-key="string"><span class="val" data-val="string"></span></div>
+  <div class="ctrl"><label>Comment</label><input type="color" data-key="comment"><span class="val" data-val="comment"></span></div>
+  <div class="ctrl"><label>Number</label><input type="color" data-key="number"><span class="val" data-val="number"></span></div>
+  <div class="ctrl"><label>Function</label><input type="color" data-key="function"><span class="val" data-val="function"></span></div>
+  <div class="ctrl"><label>Class Name</label><input type="color" data-key="class_name"><span class="val" data-val="class_name"></span></div>
+  <div class="ctrl"><label>Decorator</label><input type="color" data-key="decorator"><span class="val" data-val="decorator"></span></div>
+
+  <h2>UI Chrome</h2>
+  <div class="ctrl"><label>Chrome BG</label><input type="color" data-key="chrome_bg"><span class="val" data-val="chrome_bg"></span></div>
+  <div class="ctrl"><label>Chrome Hover</label><input type="color" data-key="chrome_hover"><span class="val" data-val="chrome_hover"></span></div>
+  <div class="ctrl"><label>Chrome Border</label><input type="color" data-key="chrome_border"><span class="val" data-val="chrome_border"></span></div>
+</div>
+
+<!-- ============ RIGHT PANEL ============ -->
+<div class="right">
+  <div class="preview-wrap">
+    <div class="preview-frame" id="previewFrame"></div>
+  </div>
+  <div class="output-area">
+    <h3>Python EditorTheme Code</h3>
+    <div class="output-text" id="outputText"></div>
+    <button class="copy-btn" id="copyBtn" onclick="copyCode()">Copy Code</button>
+  </div>
+</div>
+
+<script>
+// ======================== PRESETS ========================
+const PRESETS = {
+  'Dark (Default)': {
+    themeName:'Dark (Default)', bevel:false, radius:6,
+    bevel_light:'#505050', bevel_dark:'#1a1a1a',
+    background:'#1E1E1E',foreground:'#D4D4D4',line_number_bg:'#252526',line_number_fg:'#858585',
+    current_line:'#2D2D30',selection:'#1A5050',
+    keyword:'#569CD6',string:'#CE9178',comment:'#6A9955',number:'#B5CEA8',
+    function:'#DCDCAA',class_name:'#4EC9B0',decorator:'#C586C0',
+    chrome_bg:'#2D2D2D',chrome_hover:'#373737',chrome_border:'#333333'
+  },
+  'Monokai': {
+    themeName:'Monokai', bevel:false, radius:6,
+    bevel_light:'#505050', bevel_dark:'#1a1a1a',
+    background:'#272822',foreground:'#F8F8F2',line_number_bg:'#272822',line_number_fg:'#75715E',
+    current_line:'#3E3D32',selection:'#1A5050',
+    keyword:'#F92672',string:'#E6DB74',comment:'#75715E',number:'#AE81FF',
+    function:'#A6E22E',class_name:'#66D9EF',decorator:'#F92672',
+    chrome_bg:'#363731',chrome_hover:'#404137',chrome_border:'#3C3D36'
+  },
+  'Dracula': {
+    themeName:'Dracula', bevel:false, radius:6,
+    bevel_light:'#505050', bevel_dark:'#1a1a1a',
+    background:'#282A36',foreground:'#F8F8F2',line_number_bg:'#282A36',line_number_fg:'#6272A4',
+    current_line:'#44475A',selection:'#1A5050',
+    keyword:'#FF79C6',string:'#F1FA8C',comment:'#6272A4',number:'#BD93F9',
+    function:'#50FA7B',class_name:'#8BE9FD',decorator:'#FF79C6',
+    chrome_bg:'#373945',chrome_hover:'#414450',chrome_border:'#3D3F4A'
+  },
+  'Light': {
+    themeName:'Light', bevel:false, radius:6,
+    bevel_light:'#ffffff', bevel_dark:'#b0b0b0',
+    background:'#FFFFFF',foreground:'#333333',line_number_bg:'#F5F5F5',line_number_fg:'#999999',
+    current_line:'#FFFBDD',selection:'#1A5050',
+    keyword:'#0000FF',string:'#A31515',comment:'#008000',number:'#098658',
+    function:'#795E26',class_name:'#267F99',decorator:'#AF00DB',
+    chrome_bg:'#F0F0F0',chrome_hover:'#E5E5E5',chrome_border:'#E0E0E0'
+  },
+  'Nord': {
+    themeName:'Nord', bevel:false, radius:6,
+    bevel_light:'#505050', bevel_dark:'#1a1a1a',
+    background:'#2E3440',foreground:'#D8DEE9',line_number_bg:'#2E3440',line_number_fg:'#4C566A',
+    current_line:'#3B4252',selection:'#1A5050',
+    keyword:'#81A1C1',string:'#A3BE8C',comment:'#616E88',number:'#B48EAD',
+    function:'#88C0D0',class_name:'#8FBCBB',decorator:'#B48EAD',
+    chrome_bg:'#3D434F',chrome_hover:'#474D59',chrome_border:'#434954'
+  },
+  'Metropolis': {
+    themeName:'Metropolis', bevel:false, radius:4,
+    bevel_light:'#3a5252', bevel_dark:'#0a1414',
+    background:'#1a2a2a',foreground:'#E8E4D9',line_number_bg:'#1a2a2a',line_number_fg:'#4a6a6a',
+    current_line:'#1A3333',selection:'#1A5050',
+    keyword:'#D4A84B',string:'#A8D8D0',comment:'#4A8080',number:'#E8C547',
+    function:'#7FBFB5',class_name:'#D4A84B',decorator:'#C45C5C',
+    chrome_bg:'#121f1f',chrome_hover:'#10191b',chrome_border:'#1A3333'
+  },
+  'Win95 Dark': {
+    themeName:'Win95 Dark', bevel:true, radius:0,
+    bevel_light:'#3a5252', bevel_dark:'#0a1414',
+    background:'#1a2a2a',foreground:'#c8e0ce',line_number_bg:'#0a1212',line_number_fg:'#4a6a5a',
+    current_line:'#243636',selection:'#2d4242',
+    keyword:'#d4a84b',string:'#a8d8d0',comment:'#4a8080',number:'#e8c547',
+    function:'#7fbfb5',class_name:'#d4a84b',decorator:'#a67c35',
+    chrome_bg:'#0f1a1a',chrome_hover:'#243636',chrome_border:'#3a5252'
+  }
+};
+
+const state = {...PRESETS['Win95 Dark']};
+
+// ======================== INTERACTIVE STATE ========================
+let activeTab = 2;      // 1=untitled, 2=theme_test, 3=README
+let pressedBtn = null;  // track which button is pressed
+
+function setActiveTab(id) { activeTab = id; renderPreview(); }
+
+function btnDown(name) { pressedBtn = name; renderPreview(); }
+function btnUp() { pressedBtn = null; renderPreview(); }
+
+// ======================== BEVEL HELPERS ========================
+function bevelRaised(s) {
+  if (!s.bevel) return `border:1px solid ${s.chrome_border};border-radius:${s.radius}px;`;
+  return `border-top:2px solid ${s.bevel_light};border-left:2px solid ${s.bevel_light};border-bottom:2px solid ${s.bevel_dark};border-right:2px solid ${s.bevel_dark};border-radius:0;`;
+}
+
+function bevelSunken(s) {
+  if (!s.bevel) return `border:1px solid ${s.chrome_border};border-radius:${s.radius}px;`;
+  return `border-top:2px solid ${s.bevel_dark};border-left:2px solid ${s.bevel_dark};border-bottom:2px solid ${s.bevel_light};border-right:2px solid ${s.bevel_light};border-radius:0;`;
+}
+
+function bevelFlat(s) {
+  if (!s.bevel) return `border:1px solid ${s.chrome_border};border-radius:${s.radius}px;`;
+  return `border:1px solid ${s.bevel_light};border-top:1px solid ${s.bevel_dark};border-left:1px solid ${s.bevel_dark};border-radius:0;`;
+}
+
+function rad(s) { return s.bevel ? '0' : s.radius + 'px'; }
+
+// ======================== CODE LINES ========================
+function getCodeLines() {
+  const s = state;
+  return [
+    { num:1,  tokens:[{text:'# MyNotion Theme Preview',color:s.comment}] },
+    { num:2,  tokens:[] },
+    { num:3,  tokens:[{text:'def ',color:s.keyword},{text:'hello_world',color:s.function},{text:'():',color:s.foreground}] },
+    { num:4,  tokens:[{text:'    ',color:s.foreground},{text:'print',color:s.function},{text:'(',color:s.foreground},{text:'"Hello, Retro Future!"',color:s.string},{text:')',color:s.foreground}] },
+    { num:5,  tokens:[] },
+    { num:6,  tokens:[{text:'class ',color:s.keyword},{text:'MetropolisTheme',color:s.class_name},{text:':',color:s.foreground}] },
+    { num:7,  tokens:[{text:'    """A blast from the future."""',color:s.string}] },
+    { num:8,  tokens:[] },
+    { num:9,  tokens:[{text:'    count = ',color:s.foreground},{text:'1995',color:s.number}], current:true },
+    { num:10, tokens:[{text:'    enabled = ',color:s.foreground},{text:'True',color:s.keyword}] },
+    { num:11, tokens:[] },
+    { num:12, tokens:[{text:'@dataclass',color:s.decorator}] },
+    { num:13, tokens:[{text:'class ',color:s.keyword},{text:'EditorConfig',color:s.class_name},{text:':',color:s.foreground}] },
+    { num:14, tokens:[{text:'    name: ',color:s.foreground},{text:'str',color:s.keyword},{text:' = ',color:s.foreground},{text:'"default"',color:s.string}] },
+  ];
+}
+
+// ======================== INIT ========================
+function initControls() {
+  document.querySelectorAll('.ctrl input[data-key]').forEach(el => {
+    el.addEventListener('input', () => {
+      const k = el.dataset.key;
+      state[k] = el.type === 'range' ? parseFloat(el.value) : el.value;
+      updateAll();
+    });
+  });
+
+  const presetsEl = document.getElementById('presets');
+  Object.keys(PRESETS).forEach(name => {
+    const btn = document.createElement('button');
+    btn.textContent = name;
+    btn.onclick = () => applyPreset(name);
+    presetsEl.appendChild(btn);
+  });
+
+  syncControlsToState();
+  updateAll();
+  highlightPreset('Win95 Dark');
+}
+
+function syncControlsToState() {
+  document.querySelectorAll('.ctrl input[data-key]').forEach(el => {
+    const k = el.dataset.key;
+    if (state[k] !== undefined) el.value = state[k];
+  });
+  document.getElementById('themeName').value = state.themeName || '';
+  document.getElementById('bevelToggle').checked = state.bevel;
+  document.getElementById('bevelLabel').textContent = state.bevel ? 'ON' : 'OFF';
+}
+
+function applyPreset(name) {
+  const p = PRESETS[name];
+  if (!p) return;
+  Object.assign(state, p);
+  syncControlsToState();
+  updateAll();
+  highlightPreset(name);
+}
+
+function highlightPreset(name) {
+  document.querySelectorAll('.presets button').forEach(b => {
+    b.classList.toggle('active', b.textContent === name);
+  });
+}
+
+// ======================== UPDATE ========================
+function updateAll() {
+  document.getElementById('bevelLabel').textContent = state.bevel ? 'ON' : 'OFF';
+  renderPreview();
+  updateOutput();
+  updateValues();
+}
+
+function updateValues() {
+  document.querySelectorAll('.val[data-val]').forEach(el => {
+    const v = state[el.dataset.val];
+    if (typeof v === 'number') el.textContent = v + 'px';
+    else el.textContent = v || '';
+  });
+}
+
+// ======================== PREVIEW ========================
+function renderPreview() {
+  const s = state;
+  const lines = getCodeLines();
+  const isDark = isColorDark(s.background);
+  const fgDim = isDark ? 'rgba(255,255,255,.3)' : 'rgba(0,0,0,.3)';
+  const fgMid = isDark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.55)';
+  const R = rad(s);
+
+  // ---- Code lines ----
+  let codeHTML = '';
+  lines.forEach(line => {
+    const cur = line.current;
+    const bg = cur ? `background:${s.current_line};` : '';
+    let content = '';
+    if (line.tokens.length === 0) {
+      content = '\u00A0';
+    } else {
+      content = line.tokens.map(t => `<span style="color:${t.color}">${esc(t.text)}</span>`).join('');
+    }
+    codeHTML += `<div style="display:flex;line-height:1.8;${bg}"><span style="width:40px;text-align:right;padding-right:14px;color:${s.line_number_fg};background:${s.line_number_bg};user-select:none;flex-shrink:0">${line.num}</span><span style="white-space:pre;padding-right:12px">${content}</span></div>`;
+  });
+
+  // ---- Prompt buttons ----
+  const prompts = ['Summarize','Improve','Translate','Expand','Tone','Shorten','Custom','Examples','Transfer'];
+  let promptBtns = prompts.map(p =>
+    `<button onmousedown="btnDown('${p}')" onmouseup="btnUp()" onmouseleave="btnUp()" style="padding:5px 2px;font-size:10px;cursor:pointer;text-align:center;background:${s.chrome_hover};color:${fgMid};${pressedBtn===p ? bevelSunken(s) : bevelRaised(s)}">${p}</button>`
+  ).join('');
+
+  // ---- Toolbar buttons ----
+  function toolBtn(label, name) {
+    const id = name || label.replace(/<[^>]*>/g,'');
+    return `<span onmousedown="btnDown('${id}')" onmouseup="btnUp()" onmouseleave="btnUp()" style="width:28px;height:22px;font-size:11px;display:inline-flex;align-items:center;justify-content:center;background:${s.chrome_hover};color:${fgMid};cursor:pointer;${pressedBtn===id ? bevelSunken(s) : bevelRaised(s)}">${label}</span>`;
+  }
+
+  // ---- Title bar buttons (Win95-style) ----
+  function titleBtn(label, color, name) {
+    return `<span onmousedown="btnDown('${name}')" onmouseup="btnUp()" onmouseleave="btnUp()" style="width:20px;height:18px;font-size:11px;display:inline-flex;align-items:center;justify-content:center;background:${s.chrome_hover};color:${color || fgMid};cursor:pointer;${pressedBtn===name ? bevelSunken(s) : bevelRaised(s)}">${label}</span>`;
+  }
+
+  // ---- Title bar background ----
+  const titleBg = s.bevel
+    ? `background:${s.chrome_bg};`
+    : `background:linear-gradient(90deg,${s.chrome_bg} 0%,${s.keyword}33 50%,${s.chrome_bg} 100%);`;
+
+  // ---- Status well ----
+  function statusWell(text) {
+    return `<span style="padding:3px 10px;font-size:10px;color:${fgDim};background:${darken(s.chrome_bg,6)};${bevelSunken(s)}">${text}</span>`;
+  }
+
+  // ---- Palette swatches ----
+  const swatches = [
+    {name:'background',val:s.background},{name:'foreground',val:s.foreground},
+    {name:'keyword',val:s.keyword},{name:'string',val:s.string},
+    {name:'comment',val:s.comment},{name:'number',val:s.number},
+    {name:'function',val:s.function},{name:'class_name',val:s.class_name},
+    {name:'decorator',val:s.decorator},{name:'chrome_bg',val:s.chrome_bg},
+    {name:'current_line',val:s.current_line},{name:'selection',val:s.selection},
+  ];
+  swatches.push({name:'chrome_hover',val:s.chrome_hover},{name:'chrome_border',val:s.chrome_border});
+  if (s.bevel) {
+    swatches.push({name:'bevel_light',val:s.bevel_light},{name:'bevel_dark',val:s.bevel_dark});
+  }
+  swatches.push({name:'mint',val:'#7fbf8f'});
+  let swatchHTML = swatches.map(sw =>
+    `<div class="mn-swatch"><div class="mn-swatch-color" style="background:${sw.val};border-radius:${R};${s.bevel ? bevelSunken(s) : ''}">&nbsp;</div><span class="mn-swatch-name">${sw.name}</span><span class="mn-swatch-val">${sw.val}</span></div>`
+  ).join('');
+
+  // ---- Tab styles ----
+  function tabStyle(id) {
+    const isActive = activeTab === id;
+    if (isActive) {
+      return s.bevel
+        ? `background:${s.background};color:${s.foreground};border-top:2px solid ${s.keyword};border-left:2px solid ${s.bevel_light};border-right:2px solid ${s.bevel_dark};border-bottom:none;margin-bottom:-2px;padding:5px 12px 7px;`
+        : `background:${s.background};color:${s.foreground};border-top:2px solid ${s.keyword};border-left:1px solid ${s.chrome_border};border-right:1px solid ${s.chrome_border};border-bottom:none;margin-bottom:-1px;padding:5px 12px 6px;border-radius:${s.radius}px ${s.radius}px 0 0;`;
+    }
+    return s.bevel
+      ? `background:${s.chrome_hover};color:${fgDim};${bevelRaised(s)}padding:5px 12px;`
+      : `background:${s.chrome_hover};color:${fgDim};border:1px solid ${s.chrome_border};border-radius:${s.radius}px ${s.radius}px 0 0;padding:5px 12px;`;
+  }
+  const TABS = [{id:1,name:'untitled.txt'},{id:2,name:'theme_test.py'},{id:3,name:'README.md'}];
+
+  // ======== BUILD HTML ========
+  document.getElementById('previewFrame').innerHTML = `
+  <div style="font-family:'Consolas','Courier New',monospace;font-size:12px;color:${s.foreground};border-radius:${R};overflow:hidden;${s.bevel ? bevelRaised(s) : `box-shadow:0 4px 24px rgba(0,0,0,.4);border:1px solid ${s.chrome_border};`}">
+
+    <!-- ═══ TITLE BAR ═══ -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;user-select:none;${titleBg}${s.bevel ? bevelRaised(s) : ''}">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:14px;color:${s.keyword}">&#9672;</span>
+        <span style="font-size:12px;font-weight:bold;color:${s.foreground}">MyNotion - theme_test.py</span>
+      </div>
+      <div style="display:flex;gap:2px">
+        ${titleBtn('&#9472;',fgMid,'min')}
+        ${titleBtn('&#9633;',fgMid,'max')}
+        ${titleBtn('&times;',s.keyword,'close')}
+      </div>
+    </div>
+
+    <!-- ═══ MENU BAR ═══ -->
+    <div style="display:flex;align-items:center;padding:2px 4px;background:${s.chrome_bg};${s.bevel ? '' : `border-bottom:1px solid ${s.chrome_border};`}">
+      <span style="padding:3px 10px;color:${fgMid};font-size:12px;cursor:pointer">File</span>
+      <span style="padding:3px 10px;color:${fgMid};font-size:12px;cursor:pointer">Edit</span>
+      <span style="padding:3px 10px;color:${fgMid};font-size:12px;cursor:pointer">View</span>
+      <span style="padding:3px 10px;color:${fgMid};font-size:12px;cursor:pointer">Help</span>
+      <span style="flex:1"></span>
+      <div style="display:flex;gap:2px;align-items:center">
+        ${toolBtn('H1','H1')}${toolBtn('<b>B</b>','B')}${toolBtn('<i>I</i>','I')}${toolBtn('\u{1F517}','link')}
+        <span style="width:1px;height:16px;background:${s.chrome_border};margin:0 4px"></span>
+        <span onmousedown="btnDown('ai')" onmouseup="btnUp()" onmouseleave="btnUp()" style="height:22px;padding:0 8px;font-size:10px;display:inline-flex;align-items:center;gap:4px;cursor:pointer;background:${s.chrome_hover};color:${s.keyword};font-weight:bold;${pressedBtn==='ai' ? bevelSunken(s) : bevelRaised(s)}"><span style="font-size:13px">&#9673;</span>AI</span>
+      </div>
+    </div>
+
+    <!-- ═══ BODY ═══ -->
+    <div style="display:flex;min-height:400px">
+
+      <!-- ─── AI PANEL ─── -->
+      <div style="width:250px;display:flex;flex-direction:column;background:${s.chrome_bg};${s.bevel ? `border-right:2px solid ${s.bevel_dark};` : `border-right:1px solid ${s.chrome_border};`}">
+
+        <!-- AI title bar -->
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 8px;font-size:11px;font-weight:bold;color:${s.foreground};background:${s.bevel ? s.chrome_bg : `linear-gradient(90deg,${darken(s.chrome_bg,10)},${s.keyword}18)`};">
+          <span>AI Assistant</span>
+          <span style="color:${fgDim};cursor:pointer">&minus;</span>
+        </div>
+
+        <!-- Chat well -->
+        <div style="margin:6px;padding:8px;font-size:11px;line-height:1.6;background:${darken(s.chrome_bg,8)};color:${s.foreground};min-height:110px;flex:1;${bevelSunken(s)}">
+          <div style="margin-bottom:8px"><b style="color:#7fbf8f">You:</b> explain this code</div>
+          <div style="margin-bottom:8px"><b style="color:${fgDim}">AI:</b> This defines a MetropolisTheme class with count set to 1995 and enabled set to True.</div>
+        </div>
+
+        <!-- AI Prompts group box -->
+        <div style="margin:4px 6px;padding:12px 6px 6px;position:relative;${bevelFlat(s)}">
+          <span style="position:absolute;top:-7px;left:8px;padding:0 4px;font-size:10px;font-weight:bold;background:${s.chrome_bg};color:${s.comment}">AI Prompts</span>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px">${promptBtns}</div>
+        </div>
+
+        <!-- Model dropdown -->
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 8px;font-size:11px;color:${fgDim}">
+          <span>Model:</span>
+          <div style="flex:1;position:relative">
+            <select style="width:100%;padding:3px 20px 3px 6px;font-size:11px;background:${darken(s.chrome_bg,8)};color:${s.foreground};appearance:none;cursor:pointer;${bevelSunken(s)}font-family:inherit">
+              <option>Qwen 2.5 7B</option><option>DeepSeek Coder 1.3B</option><option>Llama 3.2 3B</option><option>GLM 4.7 Flash</option>
+            </select>
+            <span style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:8px;color:${fgDim};pointer-events:none">&#9660;</span>
+          </div>
+        </div>
+
+        <!-- Input row -->
+        <div style="display:flex;gap:4px;padding:6px">
+          <div style="flex:1;${bevelSunken(s)}background:${darken(s.chrome_bg,8)}">
+            <input style="width:100%;padding:5px 8px;font-size:11px;background:transparent;color:${s.foreground};border:none;outline:none;font-family:inherit" placeholder="Ask anything..."/>
+          </div>
+          <span onmousedown="btnDown('send')" onmouseup="btnUp()" onmouseleave="btnUp()" style="padding:5px 12px;font-size:11px;font-weight:bold;cursor:pointer;background:${s.chrome_hover};color:${fgMid};${pressedBtn==='send' ? bevelSunken(s) : bevelRaised(s)}">Send</span>
+        </div>
+      </div>
+
+      <!-- ─── EDITOR ─── -->
+      <div style="flex:1;display:flex;flex-direction:column;background:${s.background}">
+
+        <!-- Tab bar -->
+        <div style="display:flex;padding:4px 4px 0;gap:1px;background:${s.chrome_bg}">
+          ${TABS.map(t => `<span onclick="setActiveTab(${t.id})" style="font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;${tabStyle(t.id)}">${t.name}${activeTab===t.id ? ' <span style=\\"font-size:12px;opacity:.5\\">&times;</span>' : ''}</span>`).join('')}
+          <span onmousedown="btnDown('newtab')" onmouseup="btnUp()" onmouseleave="btnUp()" style="width:26px;height:22px;font-size:14px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;margin-left:2px;background:${s.chrome_hover};color:${fgDim};${pressedBtn==='newtab' ? bevelSunken(s) : bevelRaised(s)}">+</span>
+        </div>
+
+        <!-- Code area -->
+        <div style="flex:1;overflow:auto;background:${s.background};${s.bevel ? bevelSunken(s) : ''}">
+          <div style="padding:8px 0;font-size:13px;line-height:1.7">${codeHTML}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ STATUS BAR ═══ -->
+    <div style="display:flex;gap:2px;padding:2px 4px;background:${s.chrome_bg};${s.bevel ? bevelRaised(s) : ''}">
+      ${statusWell('Ln 9, Col 1')}
+      ${statusWell('Python')}
+      ${statusWell('UTF-8')}
+      <span style="flex:1;padding:3px 0;background:${darken(s.chrome_bg,6)};${bevelSunken(s)}"></span>
+      ${statusWell('100%')}
+    </div>
+  </div>
+
+  <!-- ═══ PALETTE ═══ -->
+  <div class="mn-palette">
+    <div class="mn-palette-label" style="color:${s.keyword}">${esc(s.themeName)} Palette</div>
+    <div class="mn-palette-grid">${swatchHTML}</div>
+  </div>`;
+}
+
+// ======================== OUTPUT ========================
+function updateOutput() {
+  const s = state;
+  const name = s.themeName || 'Custom';
+  const I = '    ';
+  let code = `"${name}": EditorTheme(\n`;
+  code += `${I}name="${name}",\n`;
+  code += `${I}background="${s.background}",\n`;
+  code += `${I}foreground="${s.foreground}",\n`;
+  code += `${I}line_number_bg="${s.line_number_bg}",\n`;
+  code += `${I}line_number_fg="${s.line_number_fg}",\n`;
+  code += `${I}current_line="${s.current_line}",\n`;
+  code += `${I}selection="${s.selection}",\n`;
+  code += `${I}keyword="${s.keyword}",\n`;
+  code += `${I}string="${s.string}",\n`;
+  code += `${I}comment="${s.comment}",\n`;
+  code += `${I}number="${s.number}",\n`;
+  code += `${I}function="${s.function}",\n`;
+  code += `${I}class_name="${s.class_name}",\n`;
+  code += `${I}decorator="${s.decorator}",\n`;
+  code += `${I}chrome_bg="${s.chrome_bg}",\n`;
+  code += `${I}chrome_hover="${s.chrome_hover}",\n`;
+  code += `${I}chrome_border="${s.chrome_border}",\n`;
+  code += `),`;
+  document.getElementById('outputText').textContent = code;
+}
+
+// ======================== HELPERS ========================
+function esc(str) { return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function isColorDark(hex) {
+  hex = hex.replace('#','');
+  if (hex.length===3) hex=hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+  const r=parseInt(hex.substring(0,2),16), g=parseInt(hex.substring(2,4),16), b=parseInt(hex.substring(4,6),16);
+  return (r*299+g*587+b*114)/1000<128;
+}
+
+function darken(hex, amt) {
+  hex=hex.replace('#','');
+  if(hex.length===3) hex=hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+  let r=Math.max(0,parseInt(hex.substring(0,2),16)-amt);
+  let g=Math.max(0,parseInt(hex.substring(2,4),16)-amt);
+  let b=Math.max(0,parseInt(hex.substring(4,6),16)-amt);
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+}
+
+function copyCode() {
+  const text=document.getElementById('outputText').textContent;
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn=document.getElementById('copyBtn');
+    btn.textContent='Copied!';btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent='Copy Code';btn.classList.remove('copied')},1500);
+  });
+}
+
+// ======================== BOOT ========================
+initControls();
+</script>
+</body>
+</html>

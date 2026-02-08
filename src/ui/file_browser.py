@@ -147,7 +147,7 @@ class FileBrowserPanel(QWidget):
             }}
             QPushButton:hover {{
                 background: {hover_bg};
-                border-radius: 3px;
+                border-radius: {theme.radius};
             }}
         """)
 
@@ -161,7 +161,7 @@ class FileBrowserPanel(QWidget):
             }}
             QTreeView::item {{
                 padding: 4px 8px;
-                border-radius: 3px;
+                border-radius: {theme.radius};
             }}
             QTreeView::item:hover {{
                 background-color: {hover_bg};
@@ -199,7 +199,7 @@ class FileBrowserPanel(QWidget):
             }}
             QScrollBar::handle:vertical {{
                 background: {self._hex_to_rgba(fg, 0.2)};
-                border-radius: 4px;
+                border-radius: {theme.radius};
                 min-height: 30px;
             }}
             QScrollBar::handle:vertical:hover {{
