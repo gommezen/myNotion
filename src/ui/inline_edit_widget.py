@@ -10,6 +10,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from core.settings import SettingsManager
+
 
 class _InlineLineEdit(QLineEdit):
     """QLineEdit that intercepts Enter, Tab, and Escape for the inline edit bar."""
@@ -44,6 +46,11 @@ class InlineEditBar(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._edit_complete = False
+        self._settings = SettingsManager()
+
+        self.setObjectName("IEBar")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
         self._setup_ui()
         self._apply_style()
 
@@ -53,13 +60,15 @@ class InlineEditBar(QWidget):
         layout.setSpacing(8)
 
         # Top row: label
-        prompt_label = QLabel("Edit:")
-        layout.addWidget(prompt_label)
+        self.prompt_label = QLabel("Edit:")
+        self.prompt_label.setObjectName("IEPrompt")
+        layout.addWidget(self.prompt_label)
 
         # Instruction input — tall single-line field
         self.instruction_input = _InlineLineEdit()
+        self.instruction_input.setObjectName("IEInput")
         self.instruction_input.setPlaceholderText(
-            "Type instruction, Enter to send — Enter/Tab to accept, Esc to undo"
+            "Type instruction, Enter to send \u2014 Enter/Tab to accept, Esc to undo"
         )
         self.instruction_input.setMinimumHeight(38)
         self.instruction_input.enter_pressed.connect(self._on_submit)
@@ -69,38 +78,77 @@ class InlineEditBar(QWidget):
 
         # Status label (hints + generating state)
         self.status_label = QLabel("")
+        self.status_label.setObjectName("IEStatus")
         layout.addWidget(self.status_label)
 
     def _apply_style(self) -> None:
         """Apply a high-contrast style so the bar stands out from the editor."""
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #1a1a2e;
-                color: #e0e0e0;
+        theme = self._settings.get_current_theme()
+        accent = theme.keyword
+        bg = theme.chrome_bg
+        input_bg = theme.background
+        fg = theme.foreground
+        border = theme.chrome_border
+        radius_large = theme.radius_large
+        radius = theme.radius
+
+        # Win95: explicit per-side beveled borders
+        if theme.is_beveled:
+            outer_border = theme.bevel_raised
+            input_border = theme.bevel_sunken
+            input_border_focus = theme.bevel_sunken
+        else:
+            outer_border = f"border: 2px solid {accent};"
+            input_border = f"border: 1px solid {border};"
+            input_border_focus = f"border: 2px solid {accent};"
+
+        self.setStyleSheet(f"""
+            QWidget#IEBar {{
+                background-color: {bg};
+                color: {fg};
                 font-size: 12px;
-                border: 2px solid #d4a84b;
-                border-radius: 6px;
-            }
-            QLabel {
+                {outer_border}
+                border-radius: {radius_large};
+            }}
+            QLabel#IEPrompt {{
                 background-color: transparent;
-                color: #d4a84b;
+                color: {accent};
                 border: none;
                 font-weight: bold;
-            }
-            QLineEdit {
-                background-color: #0f0f1a;
-                color: #f0f0f0;
-                border: 1px solid #444466;
-                border-radius: 4px;
+            }}
+            QLabel#IEStatus {{
+                background-color: transparent;
+                border: none;
+                font-size: 11px;
+            }}
+            QLineEdit#IEInput {{
+                background-color: {input_bg};
+                color: {fg};
+                {input_border}
+                border-radius: {radius};
                 padding: 6px 10px;
                 font-size: 13px;
-                selection-background-color: #d4a84b;
-                selection-color: #1a1a2e;
-            }
-            QLineEdit:focus {
-                border: 2px solid #d4a84b;
-            }
+                selection-background-color: {accent};
+                selection-color: {bg};
+            }}
+            QLineEdit#IEInput:focus {{
+                {input_border_focus}
+            }}
         """)
+
+        self._status_color = f"rgba({self._hex_components(fg)}, 0.6)"
+        self._error_color = "#c45c5c"
+
+    @staticmethod
+    def _hex_components(hex_color: str) -> str:
+        """Convert #RRGGBB to 'R, G, B' for use in rgba()."""
+        h = hex_color.lstrip("#")
+        return f"{int(h[0:2], 16)}, {int(h[2:4], 16)}, {int(h[4:6], 16)}"
+
+    def apply_theme(self) -> None:
+        """Public method for external theme updates."""
+        self._settings = SettingsManager()
+        self._apply_style()
 
     def show_bar(self) -> None:
         """Show the bar and focus the instruction input."""
@@ -109,6 +157,7 @@ class InlineEditBar(QWidget):
         self.instruction_input.clear()
         self.instruction_input.setEnabled(True)
         self.show()
+        self.raise_()
         self.instruction_input.setFocus()
 
     def hide_bar(self) -> None:
@@ -120,8 +169,9 @@ class InlineEditBar(QWidget):
     def set_status(self, text: str) -> None:
         """Update the status label text."""
         self.status_label.setText(text)
+        color = getattr(self, "_status_color", "rgba(180, 210, 190, 0.6)")
         self.status_label.setStyleSheet(
-            "background: transparent; color: rgba(180, 210, 190, 0.6); border: none;"
+            f"background: transparent; color: {color}; border: none; font-size: 11px;"
         )
 
     def set_generating(self, generating: bool) -> None:
@@ -137,8 +187,11 @@ class InlineEditBar(QWidget):
 
     def set_error(self, message: str) -> None:
         """Show error message in red."""
+        color = getattr(self, "_error_color", "#c45c5c")
         self.status_label.setText(f"Error: {message}")
-        self.status_label.setStyleSheet("background: transparent; color: #c45c5c; border: none;")
+        self.status_label.setStyleSheet(
+            f"background: transparent; color: {color}; border: none; font-size: 11px;"
+        )
         self.set_generating(False)
 
     def _on_submit(self) -> None:

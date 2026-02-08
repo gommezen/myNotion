@@ -13,9 +13,11 @@ from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QInputDialog,
+    QLabel,
     QLineEdit,
     QMenu,
     QPlainTextEdit,
@@ -67,7 +69,6 @@ MODEL_ROUTING = {
         "prompts": [
             "Explain",
             "Docstring",
-            "Simplify",
             "Summarize",
             "Examples",
             "Transfer",
@@ -99,13 +100,6 @@ AI_PROMPTS = [
         "icon": "☰",
         "prompt": "Add Google-style docstrings to this code. Return the complete code with docstrings added",
         "tip": "Add documentation strings to functions/classes",
-        "modes": ["coding"],
-    },
-    {
-        "label": "Simplify",
-        "icon": "◇",
-        "prompt": "Simplify this code while keeping the same behavior. Return the simplified code",
-        "tip": "Make code shorter and easier to read",
         "modes": ["coding"],
     },
     {
@@ -228,7 +222,6 @@ class SidePanel(QWidget):
         self.settings_manager = SettingsManager()
         self.current_model = MODELS[0]
         self.context_mode = "selection"
-        self.prompts_visible = True
         self._current_ai_response = ""  # Buffer for streaming response
         self._chat_html_before_response = ""  # HTML state before AI response
         self._code_blocks: list[tuple[str, str]] = []  # [(code, language), ...]
@@ -244,24 +237,49 @@ class SidePanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        # ─── AI Assistant title bar ───
+        self.title_bar = QWidget()
+        title_layout = QHBoxLayout(self.title_bar)
+        title_layout.setContentsMargins(6, 3, 6, 3)
+        title_layout.setSpacing(0)
+
+        self.title_label = QLabel("AI Assistant")
+        title_layout.addWidget(self.title_label)
+        title_layout.addStretch()
+
+        self.collapse_btn = QToolButton()
+        self.collapse_btn.setText("\u2212")  # minus sign
+        self.collapse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.collapse_btn.setFixedSize(20, 20)
+        self.collapse_btn.clicked.connect(self.collapse_requested.emit)
+        title_layout.addWidget(self.collapse_btn)
+
+        layout.addWidget(self.title_bar)
+
         # ─── Chat area ───
+        self.chat_container = QWidget()
+        chat_container_layout = QVBoxLayout(self.chat_container)
+        chat_container_layout.setContentsMargins(6, 4, 6, 6)
+        chat_container_layout.setSpacing(0)
+
         self.chat_area = QTextBrowser()
+        self.chat_area.setFrameShape(QFrame.Shape.NoFrame)
         self.chat_area.setOpenExternalLinks(False)  # Handle links ourselves
         self.chat_area.anchorClicked.connect(self._on_anchor_clicked)
         self.chat_area.setPlaceholderText("Start a conversation...")
-        layout.addWidget(self.chat_area, stretch=1)
+        chat_container_layout.addWidget(self.chat_area)
+
+        layout.addWidget(self.chat_container, stretch=1)
 
         # ─── AI Prompts section (collapsible) ───
         prompts_section = QWidget()
         prompts_layout = QVBoxLayout(prompts_section)
-        prompts_layout.setContentsMargins(16, 2, 16, 4)
+        prompts_layout.setContentsMargins(6, 2, 6, 4)
         prompts_layout.setSpacing(4)
 
-        # Toggle button
-        self.prompts_toggle = QPushButton("AI Prompts ▾")
-        self.prompts_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.prompts_toggle.clicked.connect(self._toggle_prompts)
-        prompts_layout.addWidget(self.prompts_toggle, alignment=Qt.AlignmentFlag.AlignLeft)
+        # Section label
+        self.prompts_label = QLabel("AI Prompts")
+        prompts_layout.addWidget(self.prompts_label, alignment=Qt.AlignmentFlag.AlignLeft)
 
         # Prompts grid container (3 columns, flat text chips)
         self.prompts_container = QWidget()
@@ -279,7 +297,7 @@ class SidePanel(QWidget):
         # ─── Input area ───
         input_section = QWidget()
         input_layout = QVBoxLayout(input_section)
-        input_layout.setContentsMargins(12, 0, 16, 10)
+        input_layout.setContentsMargins(6, 0, 6, 10)
         input_layout.setSpacing(5)
 
         # Model selector row
@@ -333,8 +351,7 @@ class SidePanel(QWidget):
 
         button_row.addStretch()  # Push send button to right
 
-        self.send_btn = QPushButton("▶")
-        self.send_btn.setFixedSize(24, 24)
+        self.send_btn = QPushButton("Send")
         self.send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.send_btn.clicked.connect(self._send_message)
         button_row.addWidget(self.send_btn)
@@ -368,21 +385,32 @@ class SidePanel(QWidget):
 
     def _set_input_focus_border(self, focused: bool):
         """Update input container border based on focus state."""
-        if focused:
-            self.input_row_widget.setStyleSheet("""
-                QWidget {
-                    background: rgba(180,210,190,0.02);
-                    border: 1px solid #d4a84b;
-                    border-radius: 8px;
-                }
+        theme = self.settings_manager.get_current_theme()
+        fg = theme.foreground
+        if theme.is_beveled:
+            input_well_bg = theme._darken(theme.chrome_bg, 8)
+            self.input_row_widget.setStyleSheet(f"""
+                QWidget {{
+                    background: {input_well_bg};
+                    {theme.bevel_sunken}
+                    border-radius: 0px;
+                }}
+            """)
+        elif focused:
+            self.input_row_widget.setStyleSheet(f"""
+                QWidget {{
+                    background: {self._hex_to_rgba(fg, 0.02)};
+                    border: 1px solid {theme.keyword};
+                    border-radius: 6px;
+                }}
             """)
         else:
-            self.input_row_widget.setStyleSheet("""
-                QWidget {
-                    background: rgba(180,210,190,0.02);
-                    border: 1px solid rgba(180,210,190,0.25);
-                    border-radius: 8px;
-                }
+            self.input_row_widget.setStyleSheet(f"""
+                QWidget {{
+                    background: {self._hex_to_rgba(fg, 0.02)};
+                    border: 1px solid {theme.chrome_border};
+                    border-radius: 6px;
+                }}
             """)
 
     def _set_model(self, model: dict, manual: bool = True):
@@ -454,9 +482,8 @@ class SidePanel(QWidget):
 
         # Create buttons for filtered prompts
         for i, prompt in enumerate(filtered_prompts):
-            icon = prompt.get("icon", "")
             label = prompt["label"]
-            btn = QPushButton(f"{icon} {label}")
+            btn = QPushButton(label)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setToolTip(prompt.get("tip", ""))
             btn.clicked.connect(lambda checked, p=prompt: self._on_prompt_click(p))
@@ -466,11 +493,6 @@ class SidePanel(QWidget):
 
         # Re-apply theme to new buttons
         self._apply_prompt_button_styles()
-
-    def _toggle_prompts(self):
-        self.prompts_visible = not self.prompts_visible
-        self.prompts_container.setVisible(self.prompts_visible)
-        self.prompts_toggle.setText(f"AI Prompts {'▾' if self.prompts_visible else '▸'}")
 
     def _on_prompt_click(self, prompt: dict):
         # Handle special actions (e.g., Transfer, Examples, Custom, Translate, Tone)
@@ -1109,36 +1131,73 @@ class SidePanel(QWidget):
         """Apply styles to prompt buttons (called from _apply_theme and _rebuild_prompts_grid)."""
         theme = self.settings_manager.get_current_theme()
         fg = theme.foreground
-        for btn in self.prompt_buttons:
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: transparent;
-                    border: none;
-                    border-radius: 3px;
-                    color: {self._hex_to_rgba(fg, 0.5)};
-                    font-family: 'Consolas', 'SF Mono', monospace;
-                    font-size: 11px;
-                    padding: 6px 0px;
-                    text-align: left;
-                }}
-                QPushButton:hover {{
-                    background: {self._hex_to_rgba(fg, 0.08)};
-                    color: {self._hex_to_rgba(fg, 0.8)};
-                }}
-            """)
+        accent = theme.keyword
+        if theme.is_beveled:
+            # Win95: raised beveled prompt buttons
+            for btn in self.prompt_buttons:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: {theme.chrome_hover};
+                        {theme.bevel_raised}
+                        color: {self._hex_to_rgba(fg, 0.5)};
+                        font-family: 'Consolas', 'SF Mono', monospace;
+                        font-size: 11px;
+                        padding: 5px 2px;
+                        text-align: center;
+                    }}
+                    QPushButton:hover {{
+                        color: {self._hex_to_rgba(fg, 0.8)};
+                    }}
+                    QPushButton:pressed {{
+                        background: {theme.chrome_bg};
+                        {theme.bevel_sunken}
+                        color: {accent};
+                    }}
+                """)
+        else:
+            pressed_bg = self._hex_to_rgba(accent, 0.15)
+            for btn in self.prompt_buttons:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: {self._hex_to_rgba(fg, 0.04)};
+                        border: 1px solid {self._hex_to_rgba(fg, 0.12)};
+                        border-radius: 6px;
+                        color: {self._hex_to_rgba(fg, 0.55)};
+                        font-family: 'Consolas', 'SF Mono', monospace;
+                        font-size: 11px;
+                        padding: 5px 2px;
+                        text-align: center;
+                    }}
+                    QPushButton:hover {{
+                        background: {self._hex_to_rgba(fg, 0.1)};
+                        border: 1px solid {self._hex_to_rgba(fg, 0.2)};
+                        color: {self._hex_to_rgba(fg, 0.85)};
+                    }}
+                    QPushButton:pressed {{
+                        background: {pressed_bg};
+                        border: 1px solid {accent};
+                        color: {accent};
+                    }}
+                """)
 
     def _get_options_menu_style(self, has_active_item: bool = False) -> str:
         """Get stylesheet for the options popup menu, themed to current theme."""
         theme = self.settings_manager.get_current_theme()
-        bg = theme.background
+        bg = theme.chrome_bg
         fg = theme.foreground
         accent = theme.function
+
+        menu_border = (
+            theme.bevel_raised
+            if theme.is_beveled
+            else f"border: 1px solid {self._hex_to_rgba(fg, 0.15)};"
+        )
 
         return f"""
             QMenu {{
                 background-color: {bg};
-                border: 1px solid {self._hex_to_rgba(fg, 0.15)};
-                border-radius: 10px;
+                {menu_border}
+                border-radius: {theme.radius_large};
                 padding: 6px 4px;
                 min-width: 160px;
                 max-width: 180px;
@@ -1147,7 +1206,7 @@ class SidePanel(QWidget):
                 background-color: transparent;
                 color: {self._hex_to_rgba(fg, 0.6)};
                 padding: 7px 12px;
-                border-radius: 5px;
+                border-radius: {theme.radius};
                 font-size: 11px;
                 margin: 1px 4px;
             }}
@@ -1197,80 +1256,160 @@ class SidePanel(QWidget):
     def _apply_theme(self):
         """Apply current theme colors to the side panel."""
         theme = self.settings_manager.get_current_theme()
-        bg = theme.background
+        chrome_bg = theme.chrome_bg
         fg = theme.foreground
-        accent = theme.function
 
+        # Panel background matches chrome_bg (same as menu/tab bar)
         self.setStyleSheet(f"""
             QWidget {{
-                background-color: {bg};
+                background-color: {chrome_bg};
                 color: {self._hex_to_rgba(fg, 0.65)};
                 font-family: 'Consolas', 'SF Mono', monospace;
             }}
         """)
 
-        # Chat area
+        # AI Assistant title bar
+        if hasattr(self, "title_bar"):
+            if theme.is_beveled:
+                title_bg = chrome_bg
+                title_border = ""
+            else:
+                title_bg = (
+                    f"qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+                    f"stop:0 {theme._darken(chrome_bg, 10)},"
+                    f"stop:0.5 {self._hex_to_rgba(theme.keyword, 0.09)},"
+                    f"stop:1 {chrome_bg})"
+                )
+                title_border = f"border-bottom: 1px solid {self._hex_to_rgba(fg, 0.08)};"
+            self.title_bar.setStyleSheet(f"""
+                QWidget {{
+                    background: {title_bg};
+                    {title_border}
+                }}
+                QLabel {{
+                    color: {fg};
+                    font-size: 11px;
+                    font-weight: bold;
+                    background: transparent;
+                    border: none;
+                }}
+            """)
+            self.collapse_btn.setStyleSheet(f"""
+                QToolButton {{
+                    background: transparent;
+                    border: none;
+                    color: {self._hex_to_rgba(fg, 0.3)};
+                    font-size: 14px;
+                }}
+                QToolButton:hover {{
+                    color: {self._hex_to_rgba(fg, 0.7)};
+                }}
+            """)
+
+        # Chat area — sunken well with darker bg (matches playground)
+        # Bevel/border applied to container widget (QTextBrowser ignores QSS borders)
+        chat_bg = theme._darken(chrome_bg, 8)
+        if theme.is_beveled:
+            chat_border = theme.bevel_sunken
+        else:
+            chat_border = f"border: 1px solid {theme.chrome_border};border-radius: 6px;"
+        self.chat_container.setObjectName("chat_container")
+        self.chat_container.setStyleSheet(f"""
+            QWidget#chat_container {{
+                background-color: {chat_bg};
+                {chat_border}
+            }}
+        """)
+        chat_radius = "0px" if theme.is_beveled else "6px"
         self.chat_area.setStyleSheet(f"""
             QTextBrowser {{
-                background-color: {bg};
-                color: {self._hex_to_rgba(fg, 0.65)};
+                background-color: transparent;
+                color: {fg};
                 border: none;
-                padding: 8px 16px;
-                font-size: 10px;
+                border-radius: {chat_radius};
+                padding: 8px;
+                font-size: 11px;
             }}
         """)
 
-        # Prompts toggle
-        self.prompts_toggle.setStyleSheet(f"""
-            QPushButton {{
+        # Prompts label
+        self.prompts_label.setStyleSheet(f"""
+            QLabel {{
                 background: transparent;
-                border: none;
                 color: {self._hex_to_rgba(fg, 0.4)};
                 font-size: 10px;
                 font-weight: 600;
                 padding: 2px 0;
                 margin: 0;
-                letter-spacing: 0.1em;
-                text-transform: uppercase;
-                text-align: left;
-            }}
-            QPushButton:hover {{
-                color: {self._hex_to_rgba(fg, 0.8)};
             }}
         """)
 
         # Prompt chips (flat text, no borders)
         self._apply_prompt_button_styles()
 
-        # Model button
-        self.model_btn.setStyleSheet(f"""
-            QToolButton {{
-                background: transparent;
-                border: none;
-                color: {self._hex_to_rgba(fg, 0.4)};
-                font-size: 10px;
-                font-weight: 600;
-                padding: 2px 0;
-                margin: 0;
-                letter-spacing: 0.1em;
-                text-transform: uppercase;
-                text-align: left;
-            }}
-            QToolButton:hover {{
-                color: {self._hex_to_rgba(fg, 0.8)};
-            }}
-            QToolButton::menu-indicator {{
-                image: none;
-                width: 0px;
-            }}
-        """)
+        # Model button — Win95 gets sunken dropdown look
+        accent = theme.keyword
+        if theme.is_beveled:
+            model_bg = theme._darken(theme.chrome_bg, 8)
+            self.model_btn.setStyleSheet(f"""
+                QToolButton {{
+                    background: {model_bg};
+                    {theme.bevel_sunken}
+                    color: {fg};
+                    font-size: 11px;
+                    padding: 3px 6px;
+                    text-align: left;
+                }}
+                QToolButton:hover {{
+                    color: {self._hex_to_rgba(fg, 0.8)};
+                }}
+                QToolButton:pressed {{
+                    background: {theme.chrome_bg};
+                    color: {accent};
+                }}
+                QToolButton::menu-indicator {{
+                    image: none;
+                    width: 0px;
+                }}
+            """)
+        else:
+            pressed_bg = self._hex_to_rgba(accent, 0.15)
+            self.model_btn.setStyleSheet(f"""
+                QToolButton {{
+                    background: {self._hex_to_rgba(fg, 0.04)};
+                    border: 1px solid {self._hex_to_rgba(fg, 0.12)};
+                    border-radius: 6px;
+                    color: {self._hex_to_rgba(fg, 0.55)};
+                    font-size: 11px;
+                    padding: 3px 8px;
+                    text-align: left;
+                }}
+                QToolButton:hover {{
+                    border: 1px solid {self._hex_to_rgba(fg, 0.2)};
+                    color: {self._hex_to_rgba(fg, 0.8)};
+                }}
+                QToolButton:pressed {{
+                    background: {pressed_bg};
+                    border: 1px solid {accent};
+                    color: {accent};
+                }}
+                QToolButton::menu-indicator {{
+                    image: none;
+                    width: 0px;
+                }}
+            """)
 
         # Model menu
+        model_menu_border = (
+            theme.bevel_raised
+            if theme.is_beveled
+            else f"border: 1px solid {self._hex_to_rgba(fg, 0.1)};"
+        )
         menu_style = f"""
             QMenu {{
-                background-color: {bg};
-                border: 1px solid {self._hex_to_rgba(fg, 0.1)};
-                border-radius: 3px;
+                background-color: {chrome_bg};
+                {model_menu_border}
+                border-radius: {theme.radius};
                 padding: 4px 0;
                 font-size: 10px;
             }}
@@ -1290,14 +1429,24 @@ class SidePanel(QWidget):
         # Options button (+ button in input row)
         self._update_options_button_state()
 
-        # Input container with visible rounded border
-        self.input_row_widget.setStyleSheet(f"""
-            QWidget {{
-                background: {self._hex_to_rgba(fg, 0.02)};
-                border: 1px solid {self._hex_to_rgba(fg, 0.25)};
-                border-radius: 8px;
-            }}
-        """)
+        # Input container — Win95 gets sunken well with darker bg
+        if theme.is_beveled:
+            input_well_bg = theme._darken(theme.chrome_bg, 8)
+            self.input_row_widget.setStyleSheet(f"""
+                QWidget {{
+                    background: {input_well_bg};
+                    {theme.bevel_sunken}
+                    border-radius: 0px;
+                }}
+            """)
+        else:
+            self.input_row_widget.setStyleSheet(f"""
+                QWidget {{
+                    background: {self._hex_to_rgba(fg, 0.02)};
+                    border: 1px solid {theme.chrome_border};
+                    border-radius: 6px;
+                }}
+            """)
 
         # Input field (multi-line text area)
         self.input_field.setStyleSheet(f"""
@@ -1310,18 +1459,52 @@ class SidePanel(QWidget):
             }}
         """)
 
-        # Send button
-        self.send_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: transparent;
-                border: none;
-                color: {accent};
-                font-size: 12px;
-            }}
-            QPushButton:hover {{
-                color: {self._hex_to_rgba(fg, 0.8)};
-            }}
-        """)
+        # Send button — visible button with accent flash on press
+        accent = theme.keyword
+        fg_mid = self._hex_to_rgba(fg, 0.55)
+        pressed_bg = self._hex_to_rgba(accent, 0.25)
+        if theme.is_beveled:
+            self.send_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {theme.chrome_hover};
+                    {theme.bevel_raised}
+                    color: {fg_mid};
+                    font-size: 11px;
+                    font-weight: bold;
+                    padding: 5px 12px;
+                }}
+                QPushButton:hover {{
+                    background: {self._hex_to_rgba(accent, 0.1)};
+                    color: {accent};
+                }}
+                QPushButton:pressed {{
+                    background: {theme.chrome_bg};
+                    {theme.bevel_sunken}
+                    color: {accent};
+                }}
+            """)
+        else:
+            self.send_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {theme.chrome_hover};
+                    border: 1px solid {theme.chrome_border};
+                    border-radius: 6px;
+                    color: {fg_mid};
+                    font-size: 11px;
+                    font-weight: bold;
+                    padding: 5px 12px;
+                }}
+                QPushButton:hover {{
+                    background: {self._hex_to_rgba(accent, 0.12)};
+                    border: 1px solid {accent};
+                    color: {accent};
+                }}
+                QPushButton:pressed {{
+                    background: {pressed_bg};
+                    border: 1px solid {accent};
+                    color: {fg};
+                }}
+            """)
 
         # Stop button (red accent for visibility)
         self.stop_btn.setStyleSheet("""

@@ -9,6 +9,8 @@ from pathlib import Path
 
 from PyQt6.QtCore import (
     QEasingCurve,
+    QEvent,
+    QPoint,
     QPropertyAnimation,
     QSettings,
     Qt,
@@ -19,6 +21,7 @@ from PyQt6.QtGui import (
     QActionGroup,
     QIcon,
     QKeySequence,
+    QPixmap,
 )
 from PyQt6.QtWidgets import (
     QDockWidget,
@@ -70,6 +73,7 @@ class MainWindow(QMainWindow):
         self._setup_side_panel()
         self._setup_menus()
         self._setup_toolbar()
+        self._setup_resize_grips()
         self._setup_statusbar()
         self._setup_completion()
         self._setup_inline_edit()
@@ -113,6 +117,35 @@ class MainWindow(QMainWindow):
         except Exception:
             pass  # Silently ignore on unsupported Windows versions
 
+    def _apply_title_bar_text_color(self, hex_color: str):
+        """Set the Windows title bar text color using the DWM API."""
+        if sys.platform != "win32":
+            return
+        try:
+            hwnd = int(self.winId())
+            h = hex_color.lstrip("#")
+            # DWM expects COLORREF: 0x00BBGGRR
+            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+            color = ctypes.c_int(r | (g << 8) | (b << 16))
+            # DWMWA_TEXT_COLOR = 36 (Windows 11+)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd, 36, ctypes.byref(color), ctypes.sizeof(color)
+            )
+        except Exception:
+            pass  # Silently ignore on unsupported Windows versions
+
+    def _update_window_title(self):
+        """Update window title to show current filename."""
+        editor = self.current_editor()
+        if editor and editor.filepath:
+            filename = Path(editor.filepath).name
+            title = f"MyNotion - {filename}"
+        else:
+            title = "MyNotion"
+        self.setWindowTitle(title)  # Taskbar / Alt+Tab
+        if hasattr(self, "_title_text_label"):
+            self._title_text_label.setText(title)
+
     def _apply_theme(self):
         """Apply current theme to the entire application."""
         theme = self.settings_manager.get_current_theme()
@@ -125,10 +158,141 @@ class MainWindow(QMainWindow):
         fg = theme.foreground
         selection = theme.selection
 
+        # Win95: explicit per-side beveled borders on buttons/menus
+        if theme.is_beveled:
+            toolbar_btn_border = theme.bevel_raised
+            menu_border = theme.bevel_raised
+            msgbox_btn_border = theme.bevel_raised
+            msgbox_btn_default_border = theme.bevel_raised
+            well_bg = theme._darken(chrome_bg, 6)
+
+            tab_qss = f"""
+            QTabBar {{
+                background-color: {chrome_bg};
+                font-size: 11px;
+            }}
+            QTabBar::tab {{
+                background-color: {chrome_hover};
+                color: {self._hex_to_rgba(fg, 0.5)};
+                padding: 5px 12px;
+                {theme.bevel_raised}
+                min-width: 80px;
+                margin-right: 0px;
+            }}
+            QTabBar::tab:selected {{
+                background-color: {bg};
+                color: {fg};
+                border-top: 2px solid {theme.keyword};
+                border-left: 2px solid {theme.bevel_light};
+                border-right: 2px solid {theme.bevel_dark};
+                border-bottom: none;
+                margin-bottom: -2px;
+                padding: 5px 12px 7px;
+            }}
+            QTabBar::tab:hover:!selected {{
+                background-color: {chrome_hover};
+                color: {self._hex_to_rgba(fg, 0.7)};
+            }}"""
+
+            pane_qss = f"""
+            QTabWidget::pane {{
+                {theme.bevel_sunken}
+                background-color: {bg};
+            }}"""
+
+            status_qss = f"""
+            QStatusBar {{
+                background-color: {chrome_bg};
+                color: {self._hex_to_rgba(fg, 0.6)};
+                {theme.bevel_raised}
+                font-size: 11px;
+                padding: 2px 4px;
+            }}
+            QStatusBar::item {{
+                border: none;
+            }}
+            QStatusBar QLabel {{
+                color: {self._hex_to_rgba(fg, 0.6)};
+                padding: 3px 10px;
+                font-size: 10px;
+                background-color: {well_bg};
+                {theme.bevel_sunken}
+            }}
+            QStatusBar QLabel:hover {{
+                color: {fg};
+            }}"""
+        else:
+            toolbar_btn_border = "border: none;"
+            menu_border = f"border: 1px solid {chrome_border};"
+            msgbox_btn_border = f"border: 1px solid {chrome_border};"
+            msgbox_btn_default_border = f"border: 1px solid {theme.keyword};"
+
+            tab_qss = f"""
+            QTabBar {{
+                background-color: {chrome_bg};
+                font-size: 11px;
+            }}
+            QTabBar::tab {{
+                background-color: {chrome_bg};
+                color: {self._hex_to_rgba(fg, 0.5)};
+                padding: 6px 12px 6px 10px;
+                border: 1px solid {chrome_border};
+                border-bottom: none;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                min-width: 80px;
+                margin-right: 2px;
+                margin-top: 2px;
+            }}
+            QTabBar::tab:selected {{
+                background-color: {bg};
+                color: {fg};
+                border: 1px solid {chrome_border};
+                border-bottom: 1px solid {bg};
+                border-top: 2px solid {theme.keyword};
+            }}
+            QTabBar::tab:hover:!selected {{
+                background-color: {self._hex_to_rgba(fg, 0.05)};
+                color: {self._hex_to_rgba(fg, 0.7)};
+            }}"""
+
+            pane_qss = f"""
+            QTabWidget::pane {{
+                border-top: 1px solid {chrome_border};
+                background-color: {bg};
+            }}"""
+
+            status_qss = f"""
+            QStatusBar {{
+                background-color: {chrome_bg};
+                color: {self._hex_to_rgba(fg, 0.6)};
+                border-top: 1px solid {chrome_border};
+                font-size: 11px;
+                padding: 2px 4px;
+            }}
+            QStatusBar::item {{
+                border: none;
+            }}
+            QStatusBar QLabel {{
+                color: {self._hex_to_rgba(fg, 0.6)};
+                background-color: {self._hex_to_rgba(fg, 0.04)};
+                border: 1px solid {self._hex_to_rgba(fg, 0.08)};
+                border-radius: 6px;
+                padding: 2px 10px;
+                margin: 1px 2px;
+                font-size: 10px;
+            }}
+            QStatusBar QLabel:hover {{
+                color: {fg};
+                background-color: {self._hex_to_rgba(fg, 0.1)};
+                border: 1px solid {self._hex_to_rgba(fg, 0.15)};
+            }}"""
+
         self.setStyleSheet(f"""
             QMainWindow {{
                 background-color: {bg};
                 font-size: 10px;
+                {theme.bevel_raised if theme.is_beveled else f"border: 1px solid {chrome_border}; border-radius: 6px;"}
             }}
             QMenuBar {{
                 background-color: {chrome_bg};
@@ -147,7 +311,7 @@ class MainWindow(QMainWindow):
             QMenu {{
                 background-color: {chrome_bg};
                 color: {fg};
-                border: 1px solid {chrome_border};
+                {menu_border}
                 padding: 4px 0px;
                 font-size: 13px;
             }}
@@ -171,10 +335,10 @@ class MainWindow(QMainWindow):
                 padding: 4px 8px;
             }}
             QToolBar QToolButton {{
-                background-color: transparent;
+                background-color: {chrome_hover if theme.is_beveled else "transparent"};
                 color: {fg};
-                border: none;
-                border-radius: 3px;
+                {toolbar_btn_border}
+                border-radius: {theme.radius};
                 padding: 4px 10px;
                 font-weight: bold;
                 font-size: 12px;
@@ -183,52 +347,12 @@ class MainWindow(QMainWindow):
                 background-color: {chrome_hover};
             }}
             QToolBar QToolButton:pressed {{
-                background-color: {selection};
+                background-color: {chrome_hover if theme.is_beveled else selection};
+                {theme.bevel_sunken if theme.is_beveled else ""}
             }}
-            QTabWidget::pane {{
-                border: none;
-                background-color: {bg};
-            }}
-            QTabBar {{
-                background-color: {chrome_bg};
-                font-size: 11px;
-            }}
-            QTabBar::tab {{
-                background-color: {chrome_bg};
-                color: {self._hex_to_rgba(fg, 0.5)};
-                padding: 8px 12px 8px 10px;
-                border: none;
-                border-top: 2px solid transparent;
-                min-width: 80px;
-                margin-right: 0px;
-            }}
-            QTabBar::tab:selected {{
-                background-color: {bg};
-                color: {fg};
-                border-top: 2px solid {theme.keyword};
-            }}
-            QTabBar::tab:hover:!selected {{
-                background-color: {bg};
-                color: {self._hex_to_rgba(fg, 0.7)};
-            }}
-            QStatusBar {{
-                background-color: {chrome_bg};
-                color: {self._hex_to_rgba(fg, 0.6)};
-                border-top: 1px solid {chrome_border};
-                font-size: 11px;
-            }}
-            QStatusBar::item {{
-                border: none;
-            }}
-            QStatusBar QLabel {{
-                color: {self._hex_to_rgba(fg, 0.6)};
-                padding: 2px 12px;
-                font-size: 10px;
-            }}
-            QStatusBar QLabel:hover {{
-                color: {fg};
-                background-color: {chrome_hover};
-            }}
+            {pane_qss}
+            {tab_qss}
+            {status_qss}
             QMessageBox {{
                 background-color: {bg};
                 color: {fg};
@@ -238,10 +362,10 @@ class MainWindow(QMainWindow):
                 font-size: 11px;
             }}
             QMessageBox QPushButton {{
-                background-color: {chrome_bg};
+                background-color: {chrome_hover if theme.is_beveled else chrome_bg};
                 color: {fg};
-                border: 1px solid {chrome_border};
-                border-radius: 3px;
+                {msgbox_btn_border}
+                border-radius: {theme.radius};
                 padding: 6px 16px;
                 min-width: 70px;
                 font-size: 11px;
@@ -250,24 +374,113 @@ class MainWindow(QMainWindow):
                 background-color: {chrome_hover};
             }}
             QMessageBox QPushButton:pressed {{
-                background-color: {selection};
+                background-color: {chrome_hover if theme.is_beveled else selection};
+                {theme.bevel_sunken if theme.is_beveled else ""}
             }}
             QMessageBox QPushButton:default {{
-                border: 1px solid {theme.keyword};
+                {msgbox_btn_default_border}
             }}
             QDockWidget {{
                 background-color: {bg};
                 border: none;
             }}
             QMainWindow::separator {{
-                background-color: {chrome_border};
-                width: 1px;
-                height: 1px;
+                background-color: {theme.bevel_dark if theme.is_beveled else chrome_border};
+                width: {"2px" if theme.is_beveled else "1px"};
+                height: {"2px" if theme.is_beveled else "1px"};
             }}
         """)
 
-        # Set Windows title bar color to match theme
-        self._apply_title_bar_color(chrome_bg)
+        # Style the custom title bar
+        if hasattr(self, "_custom_title_bar"):
+            if theme.is_beveled:
+                self._custom_title_bar.setStyleSheet(f"""
+                    QWidget {{
+                        background-color: {chrome_bg};
+                        {theme.bevel_raised}
+                    }}
+                """)
+                wctrl_style = f"""
+                    QToolButton {{
+                        background: {chrome_hover};
+                        {theme.bevel_raised}
+                        color: {fg};
+                        font-size: 11px;
+                    }}
+                    QToolButton:hover {{
+                        color: {fg};
+                    }}
+                    QToolButton:pressed {{
+                        {theme.bevel_sunken}
+                    }}
+                """
+            else:
+                self._custom_title_bar.setStyleSheet(f"""
+                    QWidget {{
+                        background-color: {chrome_bg};
+                        border-bottom: 1px solid {chrome_border};
+                    }}
+                """)
+                wctrl_style = f"""
+                    QToolButton {{
+                        background: transparent;
+                        border: none;
+                        color: {self._hex_to_rgba(fg, 0.5)};
+                        font-size: 11px;
+                    }}
+                    QToolButton:hover {{
+                        color: {fg};
+                        background: {chrome_hover};
+                    }}
+                """
+            self._title_text_label.setStyleSheet(f"""
+                QLabel {{
+                    color: {fg};
+                    font-size: 11px;
+                    font-weight: bold;
+                    background: transparent;
+                    border: none;
+                }}
+            """)
+            self._title_icon_label.setStyleSheet(
+                "QLabel { background: transparent; border: none; }"
+            )
+            for btn in [self._min_btn, self._max_btn]:
+                btn.setStyleSheet(wctrl_style)
+            # Close button uses keyword/gold color
+            close_color = theme.keyword
+            if theme.is_beveled:
+                self._close_btn.setStyleSheet(f"""
+                    QToolButton {{
+                        background: {chrome_hover};
+                        {theme.bevel_raised}
+                        color: {close_color};
+                        font-size: 11px;
+                        font-weight: bold;
+                    }}
+                    QToolButton:hover {{
+                        color: {fg};
+                        background: {close_color};
+                    }}
+                    QToolButton:pressed {{
+                        {theme.bevel_sunken}
+                        background: {close_color};
+                    }}
+                """)
+            else:
+                self._close_btn.setStyleSheet(f"""
+                    QToolButton {{
+                        background: transparent;
+                        border: none;
+                        color: {close_color};
+                        font-size: 11px;
+                        font-weight: bold;
+                    }}
+                    QToolButton:hover {{
+                        color: {fg};
+                        background: {close_color};
+                    }}
+                """)
 
         # Set header widget background to match menu bar
         if hasattr(self, "_header_widget"):
@@ -284,25 +497,42 @@ class MainWindow(QMainWindow):
             self.activity_bar.apply_theme()
         if hasattr(self, "formatting_toolbar"):
             self.formatting_toolbar.apply_theme(theme)
+        if hasattr(self, "tab_widget"):
+            from PyQt6.QtGui import QColor, QPalette
+
+            palette = self.tab_widget.palette()
+            palette.setColor(QPalette.ColorRole.Window, QColor(theme.chrome_bg))
+            self.tab_widget.setPalette(palette)
+            self.tab_widget.setAutoFillBackground(True)
         if hasattr(self, "new_tab_btn"):
             self._update_new_tab_button_style()
+        if hasattr(self, "custom_tab_bar"):
+            self.custom_tab_bar.apply_theme(theme)
+        if hasattr(self, "find_bar"):
+            self.find_bar.apply_theme()
         for i in range(self.tab_widget.count()):
             editor = self.tab_widget.widget(i)
             if isinstance(editor, EditorTab):
                 editor.apply_theme()
+                # Propagate theme to inline edit bar if it exists
+                bar = editor.get_inline_edit_bar()
+                if bar:
+                    bar.apply_theme()
 
     def _setup_ui(self):
         """Initialize the main UI components."""
         self.setWindowTitle("MyNotion")
         self.setMinimumSize(300, 200)  # Allow small window like Notepad
 
-        # Set MyNotion icon (Art Deco / Metropolis theme)
-        # Support both development (src/ui/ -> project root) and PyInstaller bundle
-        if getattr(sys, "frozen", False):
-            base_path = Path(sys._MEIPASS)
-        else:
-            base_path = Path(__file__).parent.parent.parent
-        icon_path = base_path / "resources" / "mynotion.ico"
+        # Frameless window for custom Win95-style title bar
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
+        self._drag_pos = None
+        self._resize_edge = ""
+        self._resize_origin = QPoint()
+        self._resize_geo = self.geometry()
+
+        # Set MyNotion icon for taskbar
+        icon_path = self._get_resource_path("mynotion.ico")
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
 
@@ -334,10 +564,10 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(central_container)
 
-        # Create + button on the tab widget (not tab bar) so it's always visible
+        # Create + button on the tab widget, positioned over the tab bar area
         self.new_tab_btn = QToolButton(self.tab_widget)
         self.new_tab_btn.setText("+")
-        self.new_tab_btn.setFixedSize(28, 28)
+        self.new_tab_btn.setFixedWidth(28)
         self.new_tab_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.new_tab_btn.clicked.connect(self.new_tab)
         self._update_new_tab_button_style()
@@ -368,40 +598,57 @@ class MainWindow(QMainWindow):
         return wrapper
 
     def _update_new_tab_button_position(self):
-        """Position the + button right after the last tab."""
+        """Position the + button right after the last tab, flush with tab bar."""
+        bar_height = self.custom_tab_bar.height()
+        self.new_tab_btn.setFixedHeight(bar_height)
         if self.custom_tab_bar.count() > 0:
             last_rect = self.custom_tab_bar.tabRect(self.custom_tab_bar.count() - 1)
-            # Map to tab widget coordinates
-            x = last_rect.right() + 8
-            y = last_rect.top() + (last_rect.height() - self.new_tab_btn.height()) // 2
-            self.new_tab_btn.move(x, y)
+            x = last_rect.right() + 4
+            self.new_tab_btn.move(x, 0)
         else:
-            self.new_tab_btn.move(8, 4)
+            self.new_tab_btn.move(8, 0)
         self.new_tab_btn.raise_()
         self.new_tab_btn.show()
 
     def _update_new_tab_button_style(self):
         """Update + button style to match current theme."""
         theme = self.settings_manager.get_current_theme()
-        self.new_tab_btn.setStyleSheet(f"""
-            QToolButton {{
-                background-color: transparent;
-                color: {theme.foreground};
-                border: none;
-                font-size: 18px;
-                font-weight: bold;
-            }}
-            QToolButton:hover {{
-                background-color: {theme.chrome_hover};
-                border-radius: 3px;
-            }}
-        """)
+        if theme.is_beveled:
+            self.new_tab_btn.setStyleSheet(f"""
+                QToolButton {{
+                    background-color: {theme.chrome_hover};
+                    color: {self._hex_to_rgba(theme.foreground, 0.5)};
+                    {theme.bevel_raised}
+                    font-size: 14px;
+                    font-weight: bold;
+                }}
+                QToolButton:hover {{
+                    color: {theme.foreground};
+                }}
+            """)
+        else:
+            fg = theme.foreground
+            self.new_tab_btn.setStyleSheet(f"""
+                QToolButton {{
+                    background-color: transparent;
+                    color: {self._hex_to_rgba(fg, 0.35)};
+                    border: none;
+                    border-radius: 6px;
+                    font-size: 18px;
+                    font-weight: bold;
+                }}
+                QToolButton:hover {{
+                    color: {fg};
+                }}
+            """)
 
     def resizeEvent(self, event):
-        """Handle resize to update + button position."""
+        """Handle resize to update + button position and resize grips."""
         super().resizeEvent(event)
         if hasattr(self, "new_tab_btn"):
             QTimer.singleShot(10, self._update_new_tab_button_position)
+        if hasattr(self, "_resize_grips"):
+            self._position_resize_grips()
 
     def _setup_side_panel(self):
         """Create the side panel with activity bar and content panels."""
@@ -719,6 +966,13 @@ class MainWindow(QMainWindow):
         settings_action.triggered.connect(self._show_settings)
         view_menu.addAction(settings_action)
 
+        # Help menu
+        help_menu = menubar.addMenu(self.tr("&Help"))
+
+        about_action = QAction(self.tr("About MyNotion"), self)
+        about_action.triggered.connect(self._show_about)
+        help_menu.addAction(about_action)
+
     def _on_panel_selected(self, panel_id: str):
         """Switch to selected panel in activity bar."""
         # If clicking the already-active panel, toggle collapse
@@ -764,44 +1018,260 @@ class MainWindow(QMainWindow):
             self._collapse_side_panel()
 
     def _setup_toolbar(self):
-        """Create the formatting toolbar centered inline with menu bar."""
+        """Create custom title bar and formatting toolbar."""
         from PyQt6.QtWidgets import QHBoxLayout
 
         self.formatting_toolbar = FormattingToolbar(self)
 
-        # Build a custom header: [MenuBar] --- [FormattingToolbar centered] ---
+        # Header: [Title bar row] + [Menu/toolbar row]
         self._header_widget = QWidget(self)
-        header_layout = QHBoxLayout(self._header_widget)
-        header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(0)
+        header_vlayout = QVBoxLayout(self._header_widget)
+        header_vlayout.setContentsMargins(0, 0, 0, 0)
+        header_vlayout.setSpacing(0)
 
-        header_layout.addWidget(self._menu_bar)
-        header_layout.addStretch(1)
-        header_layout.addWidget(self.formatting_toolbar)
-        header_layout.addStretch(1)
+        # ── Custom title bar ──
+        self._custom_title_bar = QWidget()
+        self._custom_title_bar.setFixedHeight(26)
+        tb_layout = QHBoxLayout(self._custom_title_bar)
+        tb_layout.setContentsMargins(4, 2, 2, 2)
+        tb_layout.setSpacing(4)
 
-        # AI completion toggle (top-right)
-        self.completion_label = QLabel("◇")
-        self.completion_label.setToolTip(self.tr("AI Code Completion (Ctrl+Shift+Space)"))
-        self.completion_label.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.completion_label.mousePressEvent = self._on_completion_label_click
-        header_layout.addWidget(self.completion_label)
+        # App icon (16x16)
+        self._title_icon_label = QLabel()
+        self._title_icon_label.setFixedSize(16, 16)
+        self._title_icon_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        icon_path = self._get_resource_path("mynotion.ico")
+        if icon_path.exists():
+            icon = QIcon(str(icon_path))
+            self._title_icon_label.setPixmap(icon.pixmap(16, 16))
+        tb_layout.addWidget(self._title_icon_label)
+
+        # Title text
+        self._title_text_label = QLabel("MyNotion")
+        self._title_text_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        tb_layout.addWidget(self._title_text_label)
+        tb_layout.addStretch()
+
+        # Window control buttons: minimize, maximize, close
+        self._min_btn = QToolButton()
+        self._min_btn.setText("\u2500")
+        self._min_btn.setFixedSize(22, 18)
+        self._min_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._min_btn.clicked.connect(self.showMinimized)
+        tb_layout.addWidget(self._min_btn)
+
+        self._max_btn = QToolButton()
+        self._max_btn.setText("\u25a1")
+        self._max_btn.setFixedSize(22, 18)
+        self._max_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._max_btn.clicked.connect(self._toggle_maximize)
+        tb_layout.addWidget(self._max_btn)
+
+        self._close_btn = QToolButton()
+        self._close_btn.setText("\u00d7")
+        self._close_btn.setFixedSize(22, 18)
+        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._close_btn.clicked.connect(self.close)
+        tb_layout.addWidget(self._close_btn)
+
+        header_vlayout.addWidget(self._custom_title_bar)
+
+        # Install event filter for title bar dragging
+        self._custom_title_bar.installEventFilter(self)
+
+        # ── Menu/toolbar row ──
+        toolbar_row = QWidget()
+        toolbar_layout = QHBoxLayout(toolbar_row)
+        toolbar_layout.setContentsMargins(0, 0, 8, 0)
+        toolbar_layout.setSpacing(0)
+
+        toolbar_layout.addWidget(self._menu_bar)
+        toolbar_layout.addStretch(1)
+        toolbar_layout.addWidget(self.formatting_toolbar)
+
+        # AI completion toggle button
+        self.completion_btn = QToolButton()
+        self.completion_btn.setText("\u25c9 AI")
+        self.completion_btn.setToolTip(self.tr("AI Code Completion (Ctrl+Shift+Space)"))
+        self.completion_btn.setFixedHeight(22)
+        self.completion_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.completion_btn.clicked.connect(self._toggle_completion)
+        self.completion_btn.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.completion_btn.customContextMenuRequested.connect(self._on_completion_btn_context_menu)
+        toolbar_layout.addWidget(self.completion_btn)
+
+        header_vlayout.addWidget(toolbar_row)
 
         self.setMenuWidget(self._header_widget)
 
         # Connect signals
         self.formatting_toolbar.heading_selected.connect(self._insert_heading)
-        self.formatting_toolbar.list_selected.connect(self._insert_list)
         self.formatting_toolbar.bold_clicked.connect(self._toggle_bold)
         self.formatting_toolbar.italic_clicked.connect(self._toggle_italic)
-        self.formatting_toolbar.link_clicked.connect(self._insert_link)
         self.formatting_toolbar.clear_format_clicked.connect(self._clear_formatting)
 
         # Apply theme
         self.formatting_toolbar.apply_theme(self.settings_manager.get_current_theme())
 
+    def _get_resource_path(self, filename: str) -> Path:
+        """Get path to a resource file, supporting both dev and PyInstaller."""
+        if getattr(sys, "frozen", False):
+            base_path = Path(sys._MEIPASS)
+        else:
+            base_path = Path(__file__).parent.parent.parent
+        return base_path / "resources" / filename
+
+    def _toggle_maximize(self):
+        """Toggle between maximized and normal window state."""
+        if self.isMaximized():
+            self.showNormal()
+            self._max_btn.setText("\u25a1")
+        else:
+            self.showMaximized()
+            self._max_btn.setText("\u2750")
+
+    def keyPressEvent(self, event):
+        """Handle Win+Arrow window snapping for frameless window."""
+        if event.modifiers() == Qt.KeyboardModifier.MetaModifier:
+            screen = self.screen().availableGeometry()
+            key = event.key()
+            if key == Qt.Key.Key_Left:
+                self.showNormal()
+                self._max_btn.setText("\u25a1")
+                self.setGeometry(screen.x(), screen.y(), screen.width() // 2, screen.height())
+                return
+            if key == Qt.Key.Key_Right:
+                self.showNormal()
+                self._max_btn.setText("\u25a1")
+                self.setGeometry(
+                    screen.x() + screen.width() // 2,
+                    screen.y(),
+                    screen.width() // 2,
+                    screen.height(),
+                )
+                return
+            if key == Qt.Key.Key_Up:
+                self.showMaximized()
+                self._max_btn.setText("\u2750")
+                return
+            if key == Qt.Key.Key_Down:
+                if self.isMaximized():
+                    self.showNormal()
+                    self._max_btn.setText("\u25a1")
+                else:
+                    self.showMinimized()
+                return
+        super().keyPressEvent(event)
+
+    _EDGE_CURSORS = {
+        "top": Qt.CursorShape.SizeVerCursor,
+        "bottom": Qt.CursorShape.SizeVerCursor,
+        "left": Qt.CursorShape.SizeHorCursor,
+        "right": Qt.CursorShape.SizeHorCursor,
+        "top_left": Qt.CursorShape.SizeFDiagCursor,
+        "bottom_right": Qt.CursorShape.SizeFDiagCursor,
+        "top_right": Qt.CursorShape.SizeBDiagCursor,
+        "bottom_left": Qt.CursorShape.SizeBDiagCursor,
+    }
+
+    def _setup_resize_grips(self):
+        """Create invisible overlay widgets at window edges for resize."""
+        self._resize_grips = {}
+        for edge, cursor in self._EDGE_CURSORS.items():
+            grip = QWidget(self)
+            grip.setCursor(cursor)
+            grip.setStyleSheet("background: transparent;")
+            grip.setProperty("resize_edge", edge)
+            grip.installEventFilter(self)
+            self._resize_grips[edge] = grip
+        self._position_resize_grips()
+
+    def _position_resize_grips(self):
+        """Position resize grips at window edges and corners."""
+        g = 6
+        w, h = self.width(), self.height()
+        gr = self._resize_grips
+        gr["top"].setGeometry(g, 0, w - 2 * g, g)
+        gr["bottom"].setGeometry(g, h - g, w - 2 * g, g)
+        gr["left"].setGeometry(0, g, g, h - 2 * g)
+        gr["right"].setGeometry(w - g, g, g, h - 2 * g)
+        gr["top_left"].setGeometry(0, 0, g, g)
+        gr["top_right"].setGeometry(w - g, 0, g, g)
+        gr["bottom_left"].setGeometry(0, h - g, g, g)
+        gr["bottom_right"].setGeometry(w - g, h - g, g, g)
+        for grip in gr.values():
+            grip.raise_()
+
+    def eventFilter(self, obj: object, event: QEvent) -> bool:
+        """Handle title bar dragging and resize grip events."""
+        # ── Title bar dragging ──
+        if hasattr(self, "_custom_title_bar") and obj == self._custom_title_bar:
+            if event.type() == QEvent.Type.MouseButtonPress:
+                if event.button() == Qt.MouseButton.LeftButton:
+                    self._drag_pos = event.globalPosition().toPoint()
+                    return True
+            elif event.type() == QEvent.Type.MouseMove:
+                if self._drag_pos is not None:
+                    if self.isMaximized():
+                        ratio = event.position().x() / self.width()
+                        self.showNormal()
+                        self._max_btn.setText("\u25a1")
+                        new_x = int(event.globalPosition().x() - self.width() * ratio)
+                        new_y = int(event.globalPosition().y() - 13)
+                        self.move(new_x, new_y)
+                        self._drag_pos = event.globalPosition().toPoint()
+                    else:
+                        delta = event.globalPosition().toPoint() - self._drag_pos
+                        self.move(self.pos() + delta)
+                        self._drag_pos = event.globalPosition().toPoint()
+                    return True
+            elif event.type() == QEvent.Type.MouseButtonRelease:
+                self._drag_pos = None
+                return True
+            elif (
+                event.type() == QEvent.Type.MouseButtonDblClick
+                and event.button() == Qt.MouseButton.LeftButton
+            ):
+                self._toggle_maximize()
+                return True
+
+        # ── Resize grip handling ──
+        edge = obj.property("resize_edge") if hasattr(obj, "property") else None
+        if edge and not self.isMaximized():
+            if (
+                event.type() == QEvent.Type.MouseButtonPress
+                and event.button() == Qt.MouseButton.LeftButton
+            ):
+                self._resize_edge = edge
+                self._resize_origin = event.globalPosition().toPoint()
+                self._resize_geo = self.geometry()
+                return True
+            if event.type() == QEvent.Type.MouseMove and self._resize_edge:
+                delta = event.globalPosition().toPoint() - self._resize_origin
+                geo = self._resize_geo
+                new_geo = geo.__class__(geo)
+                if "left" in self._resize_edge:
+                    new_geo.setLeft(geo.left() + delta.x())
+                if "right" in self._resize_edge:
+                    new_geo.setRight(geo.right() + delta.x())
+                if "top" in self._resize_edge:
+                    new_geo.setTop(geo.top() + delta.y())
+                if "bottom" in self._resize_edge:
+                    new_geo.setBottom(geo.bottom() + delta.y())
+                if (
+                    new_geo.width() >= self.minimumWidth()
+                    and new_geo.height() >= self.minimumHeight()
+                ):
+                    self.setGeometry(new_geo)
+                return True
+            if event.type() == QEvent.Type.MouseButtonRelease:
+                self._resize_edge = ""
+                return True
+
+        return super().eventFilter(obj, event)
+
     def _setup_statusbar(self):
-        """Create the status bar with multiple indicators."""
+        """Create the status bar with all indicators."""
         self.statusbar = QStatusBar(self)
         self.setStatusBar(self.statusbar)
 
@@ -863,35 +1333,54 @@ class MainWindow(QMainWindow):
         self._update_completion_indicator()
 
     def _update_completion_indicator(self):
-        """Update the status bar completion icon and tooltip."""
-        if not hasattr(self, "completion_label"):
+        """Update the AI button style and tooltip."""
+        if not hasattr(self, "completion_btn"):
             return
         theme = self.settings_manager.get_current_theme()
         enabled = self._completion_manager.is_enabled()
         model = self.settings_manager.get_completion_model()
 
         fg = theme.foreground
-        if enabled:
-            self.completion_label.setText("◈")
-            self.completion_label.setToolTip(self.tr(f"AI Code Completion: ON — {model}"))
-            self.completion_label.setStyleSheet(
-                f"color: {theme.keyword}; font-size: 16px; padding: 4px 12px 4px 6px;"
+        if theme.is_beveled:
+            border = theme.bevel_raised
+        else:
+            border = f"border: 1px solid {theme.chrome_border};border-radius: {theme.radius};"
+        pressed_bg = self._hex_to_rgba(theme.keyword, 0.15)
+        if theme.is_beveled:
+            pressed_style = (
+                f"QToolButton:pressed {{ background: {theme.chrome_bg};"
+                f" {theme.bevel_sunken} color: {theme.keyword}; }}"
             )
         else:
-            self.completion_label.setText("◇")
-            self.completion_label.setToolTip(self.tr("AI Code Completion (Ctrl+Shift+Space)"))
-            self.completion_label.setStyleSheet(
-                f"color: {self._hex_to_rgba(fg, 0.4)}; font-size: 16px; padding: 4px 12px 4px 6px;"
+            pressed_style = (
+                f"QToolButton:pressed {{ background: {pressed_bg};"
+                f" border: 1px solid {theme.keyword}; color: {theme.keyword}; }}"
+            )
+        hover_border = (
+            "" if theme.is_beveled else f" border: 1px solid {self._hex_to_rgba(fg, 0.3)};"
+        )
+        if enabled:
+            self.completion_btn.setText("\u25c9 AI")
+            self.completion_btn.setToolTip(self.tr(f"AI Code Completion: ON \u2014 {model}"))
+            self.completion_btn.setStyleSheet(
+                f"QToolButton {{ background: {theme.chrome_hover};"
+                f" color: {theme.keyword}; font-size: 11px;"
+                f" font-weight: bold; {border} padding: 0 8px; }}"
+                f"QToolButton:hover {{ color: {fg};{hover_border} }}"
+                f" {pressed_style}"
+            )
+        else:
+            self.completion_btn.setText("\u25c9 AI")
+            self.completion_btn.setToolTip(self.tr("AI Code Completion (Ctrl+Shift+Space)"))
+            self.completion_btn.setStyleSheet(
+                f"QToolButton {{ background: {theme.chrome_hover};"
+                f" color: {self._hex_to_rgba(fg, 0.55)}; font-size: 11px;"
+                f" font-weight: bold; {border} padding: 0 8px; }}"
+                f"QToolButton:hover {{ color: {fg};{hover_border} }}"
+                f" {pressed_style}"
             )
 
-    def _on_completion_label_click(self, event):
-        """Handle clicks on the completion status bar icon."""
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._toggle_completion()
-        elif event.button() == Qt.MouseButton.RightButton:
-            self._show_completion_model_menu(event)
-
-    def _show_completion_model_menu(self, event):
+    def _on_completion_btn_context_menu(self, pos):
         """Show a popup menu to select the completion model."""
         from PyQt6.QtWidgets import QMenu
 
@@ -906,7 +1395,7 @@ class MainWindow(QMainWindow):
             action.triggered.connect(self._on_completion_model_selected)
             menu.addAction(action)
 
-        menu.exec(self.completion_label.mapToGlobal(event.pos()))
+        menu.exec(self.completion_btn.mapToGlobal(pos))
 
     def _on_completion_model_selected(self):
         """Handle completion model selection from popup menu."""
@@ -1328,6 +1817,8 @@ class MainWindow(QMainWindow):
                 self._prev_inline_edit_editor = editor
             # Update find bar's editor reference
             self.find_bar.set_editor(editor)
+            # Update window title with current filename
+            self._update_window_title()
             # Apply fade-in transition
             self._animate_tab_transition(editor)
 
@@ -1504,6 +1995,7 @@ class MainWindow(QMainWindow):
         editor.load_file(filepath)
         self.tab_widget.setTabText(self.tab_widget.currentIndex(), Path(filepath).name)
         self._update_language_indicator(editor.language)
+        self._update_window_title()
         self.recent_files.add_file(filepath)
 
     # Tab management
@@ -1633,6 +2125,7 @@ class MainWindow(QMainWindow):
             editor.save_file(filepath)
             self.tab_widget.setTabText(self.tab_widget.currentIndex(), Path(filepath).name)
             self._update_language_indicator(editor.language)
+            self._update_window_title()
             self.recent_files.add_file(filepath)
 
     # Edit operations (delegate to current editor)
@@ -1685,6 +2178,34 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self)
         dialog.settings_changed.connect(self._apply_settings_to_editors)
         dialog.exec()
+
+    def _show_about(self):
+        """Show the About MyNotion dialog with the decorative logo."""
+        about_box = QMessageBox(self)
+        about_box.setWindowTitle(self.tr("About MyNotion"))
+        about_box.setText(
+            self.tr(
+                "<h3>MyNotion</h3>"
+                "<p>A lightweight text and code editor with local AI integration.</p>"
+                "<p>Built with Python + PyQt6.</p>"
+            )
+        )
+
+        # Load the decorative SVG logo
+        from PyQt6.QtGui import QImage, QPainter
+        from PyQt6.QtSvg import QSvgRenderer
+
+        svg_path = self._get_resource_path("mynotion_about.svg")
+        if svg_path.exists():
+            renderer = QSvgRenderer(str(svg_path))
+            image = QImage(64, 64, QImage.Format.Format_ARGB32)
+            image.fill(0)
+            painter = QPainter(image)
+            renderer.render(painter)
+            painter.end()
+            about_box.setIconPixmap(QPixmap.fromImage(image))
+
+        about_box.exec()
 
     def _apply_settings_to_editors(self):
         """Apply changed settings to all editor tabs and window chrome."""
