@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ai.completion import CompletionManager
+from ai.worker import AIManager
 from core.recent_files import RecentFilesManager
 from core.settings import SettingsManager
 from syntax.highlighter import Language
@@ -71,6 +72,7 @@ class MainWindow(QMainWindow):
         self._setup_toolbar()
         self._setup_statusbar()
         self._setup_completion()
+        self._setup_inline_edit()
         self._apply_theme()
         self._apply_child_themes()
         self._restore_geometry()
@@ -942,6 +944,198 @@ class MainWindow(QMainWindow):
         model = self.settings_manager.get_completion_model()
         self._completion_manager.request_completion(prefix, suffix, model)
 
+    # ─── Inline AI Edit (Ctrl+K) ───
+
+    def _setup_inline_edit(self):
+        """Initialize the inline AI edit system."""
+        self._inline_edit_manager = AIManager(self)
+        self._inline_edit_buffer = ""
+        self._inline_edit_selection_start = -1
+        self._inline_edit_selection_end = -1
+        self._inline_edit_active = False
+        self._prev_inline_edit_editor = None
+
+        self._inline_edit_manager.token_received.connect(self._on_inline_edit_token)
+        self._inline_edit_manager.generation_finished.connect(self._on_inline_edit_finished)
+        self._inline_edit_manager.generation_error.connect(self._on_inline_edit_error)
+
+        # Shortcut: Ctrl+K to trigger inline edit
+        inline_edit_action = QAction(self.tr("Inline AI Edit"), self)
+        inline_edit_action.setShortcut(QKeySequence("Ctrl+K"))
+        inline_edit_action.triggered.connect(self._on_inline_edit_shortcut)
+        self.addAction(inline_edit_action)
+
+    def _on_inline_edit_shortcut(self):
+        """Handle Ctrl+K: show inline edit bar for current selection."""
+        editor = self.current_editor()
+        if not editor:
+            return
+
+        # Cancel any in-progress inline edit
+        if self._inline_edit_active:
+            self._inline_edit_manager.stop()
+            self._inline_edit_buffer = ""
+            self._inline_edit_active = False
+
+        cursor = editor.textCursor()
+
+        # Auto-select current line if no selection
+        if not cursor.hasSelection():
+            cursor.select(cursor.SelectionType.LineUnderCursor)
+            editor.setTextCursor(cursor)
+
+        # Guard: require at least 2 non-whitespace characters
+        if len(cursor.selectedText().strip()) < 2:
+            return
+
+        editor.show_inline_edit()
+
+    def _connect_inline_edit_to_editor(self, editor):
+        """Wire inline edit signals for the given editor."""
+        editor.inline_edit_requested.connect(self._on_inline_edit_requested)
+        editor.inline_edit_cancelled.connect(self._on_inline_edit_cancelled)
+        editor.inline_edit_accepted.connect(self._on_inline_edit_accepted)
+
+    def _disconnect_inline_edit_from_editor(self, editor):
+        """Disconnect inline edit signals from an editor."""
+        with contextlib.suppress(TypeError):
+            editor.inline_edit_requested.disconnect(self._on_inline_edit_requested)
+        with contextlib.suppress(TypeError):
+            editor.inline_edit_cancelled.disconnect(self._on_inline_edit_cancelled)
+        with contextlib.suppress(TypeError):
+            editor.inline_edit_accepted.disconnect(self._on_inline_edit_accepted)
+
+    def _on_inline_edit_requested(self, instruction: str):
+        """Handle instruction submission from inline edit bar."""
+        editor = self.current_editor()
+        if not editor:
+            return
+
+        cursor = editor.textCursor()
+        selected_text = cursor.selectedText().replace("\u2029", "\n")
+
+        # Save selection positions for later replacement
+        self._inline_edit_selection_start = cursor.selectionStart()
+        self._inline_edit_selection_end = cursor.selectionEnd()
+        self._inline_edit_buffer = ""
+        self._inline_edit_active = True
+
+        # Update bar status
+        bar = editor.get_inline_edit_bar()
+        if bar:
+            bar.set_generating(True)
+
+        # Build mode-aware prompt
+        is_writing = self.side_panel.get_layout_mode() == LayoutMode.WRITING
+
+        if is_writing:
+            prompt = f"Instruction: {instruction}\n\nText:\n{selected_text}\n\nEdited text:"
+            system_prompt = (
+                "You are a text editor. Edit the text according to the instruction.\n"
+                "Return ONLY the edited text. No explanations, no markdown fences, no commentary."
+            )
+        else:
+            prompt = f"Instruction: {instruction}\n\nCode:\n{selected_text}\n\nEdited code:"
+            system_prompt = (
+                "You are a code editor. Edit the code according to the instruction.\n"
+                "Return ONLY the edited code. No explanations, no markdown fences, no commentary."
+            )
+
+        # Use the side panel's current model
+        model = self.side_panel.current_model["id"]
+
+        self._inline_edit_manager.generate(
+            model=model,
+            prompt=prompt,
+            context=system_prompt,
+            mode="writing" if is_writing else "coding",
+        )
+
+    def _on_inline_edit_token(self, token: str):
+        """Collect streamed tokens into the buffer."""
+        self._inline_edit_buffer += token
+
+    def _on_inline_edit_finished(self):
+        """Handle AI generation complete — replace selection with result."""
+        editor = self.current_editor()
+        if not editor:
+            return
+
+        code = self._strip_code_fences(self._inline_edit_buffer)
+        self._inline_edit_active = False
+
+        if not code.strip():
+            bar = editor.get_inline_edit_bar()
+            if bar:
+                bar.set_error("AI returned empty response")
+            return
+
+        # Replace selection as a single undo operation
+        cursor = editor.textCursor()
+        cursor.setPosition(self._inline_edit_selection_start)
+        cursor.setPosition(self._inline_edit_selection_end, cursor.MoveMode.KeepAnchor)
+
+        cursor.beginEditBlock()
+        cursor.insertText(code)
+        cursor.endEditBlock()
+
+        # Calculate the end position of inserted text
+        insert_end = self._inline_edit_selection_start + len(code)
+
+        # Highlight the replaced region
+        editor.highlight_edited_region(self._inline_edit_selection_start, insert_end)
+
+        # Update bar status
+        bar = editor.get_inline_edit_bar()
+        if bar:
+            bar.set_status("Enter/Tab = accept, Esc = undo")
+            bar.set_generating(False)
+
+    def _on_inline_edit_error(self, error: str):
+        """Handle AI generation error."""
+        self._inline_edit_active = False
+        editor = self.current_editor()
+        if editor:
+            bar = editor.get_inline_edit_bar()
+            if bar:
+                bar.set_error(error)
+
+    def _on_inline_edit_cancelled(self):
+        """Handle cancel: stop generation, undo if edit was made, hide bar."""
+        # Stop generation if running
+        if self._inline_edit_active:
+            self._inline_edit_manager.stop()
+            self._inline_edit_buffer = ""
+            self._inline_edit_active = False
+
+        editor = self.current_editor()
+        if not editor:
+            return
+
+        # If an edit was applied, undo it
+        if editor._has_edit_highlights:
+            editor.document().undo()
+
+        editor.hide_inline_edit()
+        editor.setFocus()
+
+    def _on_inline_edit_accepted(self):
+        """Handle accept: clear highlights, hide bar, keep the edit."""
+        editor = self.current_editor()
+        if editor:
+            editor.hide_inline_edit()
+            editor.setFocus()
+
+    @staticmethod
+    def _strip_code_fences(code: str) -> str:
+        """Strip markdown code fences from AI response."""
+        lines = code.strip().split("\n")
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        return "\n".join(lines)
+
     def _restore_geometry(self):
         """Restore window geometry from settings."""
         geometry = self.settings.value("geometry")
@@ -1095,15 +1289,31 @@ class MainWindow(QMainWindow):
                 return
             # Discard: just continue closing
 
+        # Stop all running AI threads before closing
+        if hasattr(self, "_inline_edit_manager"):
+            self._inline_edit_manager.stop()
+        if hasattr(self, "side_panel") and hasattr(self.side_panel, "ai_manager"):
+            self.side_panel.ai_manager.stop()
+
         self._save_session()
         self.settings.setValue("geometry", self.saveGeometry())
         event.accept()
 
     def _on_tab_changed(self, index: int):
         """Handle tab change to update status bar with fade transition."""
+        # Disconnect previous editor's inline edit signals
+        if hasattr(self, "_prev_inline_edit_editor") and self._prev_inline_edit_editor:
+            self._disconnect_inline_edit_from_editor(self._prev_inline_edit_editor)
+
         # Cancel any pending completion from previous tab
         if hasattr(self, "_completion_manager"):
             self._completion_manager.cancel()
+
+        # Cancel any in-progress inline edit
+        if hasattr(self, "_inline_edit_manager") and self._inline_edit_active:
+            self._inline_edit_manager.stop()
+            self._inline_edit_buffer = ""
+            self._inline_edit_active = False
 
         editor = self.current_editor()
         if editor:
@@ -1112,6 +1322,10 @@ class MainWindow(QMainWindow):
             # Wire completion to new tab
             if hasattr(self, "_completion_manager"):
                 self._connect_completion_to_editor(editor)
+            # Wire inline edit to new tab
+            if hasattr(self, "_inline_edit_manager"):
+                self._connect_inline_edit_to_editor(editor)
+                self._prev_inline_edit_editor = editor
             # Update find bar's editor reference
             self.find_bar.set_editor(editor)
             # Apply fade-in transition
@@ -1302,6 +1516,9 @@ class MainWindow(QMainWindow):
         # Wire completion for new tab
         if hasattr(self, "_completion_manager"):
             self._connect_completion_to_editor(editor)
+        # Wire inline edit for new tab
+        if hasattr(self, "_inline_edit_manager"):
+            self._connect_inline_edit_to_editor(editor)
         # Track document modifications for unsaved indicator
         editor.document().modificationChanged.connect(
             lambda modified: self._on_document_modified(editor, modified)

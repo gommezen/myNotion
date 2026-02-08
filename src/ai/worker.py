@@ -4,6 +4,7 @@ Supports Ollama (local) and Anthropic (cloud) providers.
 """
 
 import asyncio
+import contextlib
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
@@ -93,6 +94,24 @@ class AIWorker(QObject):
                 self.generation_error.emit(str(e))
 
 
+class _WorkerThread(QThread):
+    """QThread that runs an AIWorker directly, without a Qt event loop.
+
+    The default QThread.run() calls exec() which starts an event loop that
+    never exits. By overriding run() to call worker.run() directly, the
+    thread exits naturally when the worker finishes, and the 'finished'
+    signal fires reliably.
+    """
+
+    def __init__(self, worker: AIWorker):
+        super().__init__()
+        self._worker = worker
+
+    def run(self):
+        """Execute the worker and exit — no event loop needed."""
+        self._worker.run()
+
+
 class AIManager(QObject):
     """
     Manages AI requests with proper thread handling.
@@ -111,7 +130,7 @@ class AIManager(QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._thread: QThread | None = None
+        self._thread: _WorkerThread | None = None
         self._worker: AIWorker | None = None
 
     def generate(self, model: str, prompt: str, context: str | None = None, mode: str = "coding"):
@@ -128,59 +147,44 @@ class AIManager(QObject):
         self.stop()
 
         # Create worker and thread
-        self._thread = QThread()
         self._worker = AIWorker()
-        self._worker.moveToThread(self._thread)
+        self._thread = _WorkerThread(self._worker)
 
         # Set request parameters
         self._worker.set_request(model, prompt, context, mode)
 
-        # Connect signals
+        # Connect worker signals — forward to manager
         self._worker.token_received.connect(self.token_received.emit)
-        self._worker.generation_finished.connect(self._on_finished)
-        self._worker.generation_error.connect(self._on_error)
+        self._worker.generation_finished.connect(self.generation_finished.emit)
+        self._worker.generation_error.connect(self.generation_error.emit)
 
-        # Start when thread starts
-        self._thread.started.connect(self._worker.run)
+        # Clear references when thread finishes naturally
+        self._thread.finished.connect(self._clear_refs)
 
-        # Start the thread
+        # Start the thread (calls _WorkerThread.run → worker.run)
         self._thread.start()
 
     def stop(self):
         """Stop current generation."""
-        # Signal the worker to cancel
+        # Signal the worker to cancel — this makes the async loop exit early
         if self._worker:
             self._worker.cancel()
 
-        # Wait for thread to finish (with timeout)
-        if self._thread and self._thread.isRunning():
-            self._thread.quit()
-            if not self._thread.wait(2000):  # 2 second timeout
-                # Force terminate if it doesn't stop gracefully
-                self._thread.terminate()
-                self._thread.wait(1000)
+        thread = self._thread
 
-        self._cleanup()
+        # Disconnect finished signal so old thread won't clear new refs
+        if thread:
+            with contextlib.suppress(TypeError):
+                thread.finished.disconnect(self._clear_refs)
 
-    def _on_finished(self):
-        """Handle generation complete."""
-        self.generation_finished.emit()
-        self._cleanup()
+        # Wait for thread to finish naturally (asyncio.run exits after cancel)
+        if thread and thread.isRunning() and not thread.wait(5000):
+            thread.terminate()
+            thread.wait(2000)
 
-    def _on_error(self, error: str):
-        """Handle generation error."""
-        self.generation_error.emit(error)
-        self._cleanup()
+        self._clear_refs()
 
-    def _cleanup(self):
-        """Clean up thread and worker."""
-        if self._thread:
-            if self._thread.isRunning():
-                self._thread.quit()
-                self._thread.wait(1000)
-            self._thread.deleteLater()
-            self._thread = None
-
-        if self._worker:
-            self._worker.deleteLater()
-            self._worker = None
+    def _clear_refs(self):
+        """Clear references to thread and worker (Qt handles actual deletion)."""
+        self._worker = None
+        self._thread = None

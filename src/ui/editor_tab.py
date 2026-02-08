@@ -35,6 +35,12 @@ class EditorTab(QPlainTextEdit):
 
     # Emitted when the editor wants a completion (prefix, suffix)
     completion_requested = pyqtSignal(str, str)
+    # Emitted when the user requests an inline AI edit (carries instruction text)
+    inline_edit_requested = pyqtSignal(str)
+    # Emitted when inline edit is cancelled (Escape or Cancel button)
+    inline_edit_cancelled = pyqtSignal()
+    # Emitted when inline edit result is accepted (Enter after generation done)
+    inline_edit_accepted = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -65,6 +71,10 @@ class EditorTab(QPlainTextEdit):
         self._completion_timer.setSingleShot(True)
         self._completion_timer.setInterval(600)
         self._completion_timer.timeout.connect(self._request_completion)
+
+        # Inline AI edit state
+        self._inline_edit_bar = None  # Lazy-created InlineEditBar
+        self._has_edit_highlights = False
 
         self._setup_editor()
         self._setup_line_numbers()
@@ -422,6 +432,11 @@ class EditorTab(QPlainTextEdit):
 
     def keyPressEvent(self, event) -> None:
         """Handle key presses for ghost text accept/dismiss and completion triggers."""
+        # If the inline edit bar is visible, don't intercept keys here
+        if self._inline_edit_bar and self._inline_edit_bar.isVisible():
+            super().keyPressEvent(event)
+            return
+
         # Tab: accept ghost text
         if event.key() == Qt.Key.Key_Tab and self.has_ghost_text():
             self._accept_ghost_text()
@@ -494,3 +509,84 @@ class EditorTab(QPlainTextEdit):
                 painter.drawText(x, y, line)
 
         painter.end()
+
+    # ─── Inline AI edit (Ctrl+K) ───
+
+    def show_inline_edit(self) -> None:
+        """Show the inline edit bar below the current selection."""
+        from ui.inline_edit_widget import InlineEditBar
+
+        # Pause code completions while inline edit is active
+        self._completion_timer.stop()
+        self.clear_ghost_text()
+
+        if not self._inline_edit_bar:
+            self._inline_edit_bar = InlineEditBar(self.viewport())
+            self._inline_edit_bar.edit_requested.connect(
+                lambda instr: self.inline_edit_requested.emit(instr)
+            )
+            self._inline_edit_bar.cancelled.connect(self.inline_edit_cancelled.emit)
+            self._inline_edit_bar.accepted.connect(self.inline_edit_accepted.emit)
+        self._position_inline_edit_bar()
+        self._inline_edit_bar.show_bar()
+
+    def hide_inline_edit(self) -> None:
+        """Hide the inline edit bar and clear highlights."""
+        if self._inline_edit_bar:
+            self._inline_edit_bar.hide_bar()
+        self.clear_edit_highlights()
+
+    def get_inline_edit_bar(self):
+        """Return the inline edit bar widget (or None if not created)."""
+        return self._inline_edit_bar
+
+    def _position_inline_edit_bar(self) -> None:
+        """Position the inline edit bar at the center of the viewport."""
+        if not self._inline_edit_bar:
+            return
+
+        viewport = self.viewport()
+
+        # Reduced width: ~60% of viewport, clamped between 400-700px
+        bar_width = max(400, min(700, int(viewport.width() * 0.6)))
+        self._inline_edit_bar.setFixedWidth(bar_width)
+
+        bar_height = self._inline_edit_bar.sizeHint().height()
+
+        # Center horizontally and vertically
+        bar_x = (viewport.width() - bar_width) // 2
+        bar_y = (viewport.height() - bar_height) // 2
+
+        self._inline_edit_bar.move(bar_x, bar_y)
+
+    def highlight_edited_region(self, start_pos: int, end_pos: int) -> None:
+        """Apply a green highlight to the edited region."""
+        selection = QTextEdit.ExtraSelection()
+        highlight_color = QColor(40, 80, 60, 50)
+        selection.format.setBackground(highlight_color)
+
+        cursor = self.textCursor()
+        cursor.setPosition(start_pos)
+        cursor.setPosition(end_pos, cursor.MoveMode.KeepAnchor)
+        selection.cursor = cursor
+
+        self.setExtraSelections([selection])
+        self._has_edit_highlights = True
+
+        # Watch for document changes to auto-clear highlights
+        self.document().contentsChanged.connect(self._on_document_changed_for_highlights)
+
+    def clear_edit_highlights(self) -> None:
+        """Remove the green edit highlights."""
+        import contextlib
+
+        if self._has_edit_highlights:
+            self.setExtraSelections([])
+            self._has_edit_highlights = False
+            # Disconnect the watcher
+            with contextlib.suppress(TypeError):
+                self.document().contentsChanged.disconnect(self._on_document_changed_for_highlights)
+
+    def _on_document_changed_for_highlights(self) -> None:
+        """Auto-clear edit highlights when document changes (undo or manual edit)."""
+        self.clear_edit_highlights()
