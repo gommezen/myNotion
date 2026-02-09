@@ -11,6 +11,7 @@ import logging
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from ai.providers.ollama import OllamaClient
+from core.settings import SettingsManager
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,8 @@ class CompletionManager(QObject):
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
-        self._client = OllamaClient()
+        host = SettingsManager().get_ollama_host()
+        self._client = OllamaClient(host=host)
         self._enabled = False
         self._current_task: asyncio.Task | None = None
         self._max_lines = 3

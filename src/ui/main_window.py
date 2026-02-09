@@ -726,11 +726,9 @@ class MainWindow(QMainWindow):
         for i in range(self.tab_widget.count()):
             editor = self.tab_widget.widget(i)
             if isinstance(editor, EditorTab) and editor.filepath and editor.document().isModified():
-                try:
-                    editor.save_file()
+                error = editor.save_file()
+                if not error:
                     saved_count += 1
-                except OSError:
-                    pass  # Silently skip files that fail to save
 
         if saved_count > 0:
             msg = f"Auto-saved {saved_count} file{'s' if saved_count > 1 else ''}"
@@ -772,7 +770,11 @@ class MainWindow(QMainWindow):
                 # Save all unsaved tabs
                 for i, _, editor in unsaved_tabs:
                     if editor.filepath:
-                        editor.save_file()
+                        error = editor.save_file()
+                        if error:
+                            QMessageBox.warning(self, self.tr("Save File"), error)
+                            event.ignore()
+                            return
                     else:
                         self.tab_widget.setCurrentIndex(i)
                         self.save_file_as()
@@ -977,7 +979,14 @@ class MainWindow(QMainWindow):
     def _open_file_path(self, filepath: str):
         """Open a specific file path in a new tab."""
         editor = self.new_tab()
-        editor.load_file(filepath)
+        error = editor.load_file(filepath)
+        if error:
+            # Close the tab we just created and show error
+            idx = self.tab_widget.currentIndex()
+            self.tab_widget.removeTab(idx)
+            editor.deleteLater()
+            QMessageBox.warning(self, self.tr("Open File"), error)
+            return
         self.tab_widget.setTabText(self.tab_widget.currentIndex(), Path(filepath).name)
         self._status_bar_mgr.update_language(editor.language)
         self._update_window_title()
@@ -1033,7 +1042,10 @@ class MainWindow(QMainWindow):
         if result == QMessageBox.StandardButton.Save:
             # Save the file
             if editor.filepath:
-                editor.save_file()
+                error = editor.save_file()
+                if error:
+                    QMessageBox.warning(self, self.tr("Save File"), error)
+                    return False
             else:
                 # No filepath, need Save As
                 index = self.tab_widget.indexOf(editor)
@@ -1087,7 +1099,10 @@ class MainWindow(QMainWindow):
         """Save the current file."""
         editor = self.current_editor()
         if editor and editor.filepath:
-            editor.save_file()
+            error = editor.save_file()
+            if error:
+                QMessageBox.warning(self, self.tr("Save File"), error)
+                return
             self.recent_files.add_file(editor.filepath)
         else:
             self.save_file_as()
@@ -1107,7 +1122,10 @@ class MainWindow(QMainWindow):
             ),
         )
         if filepath:
-            editor.save_file(filepath)
+            error = editor.save_file(filepath)
+            if error:
+                QMessageBox.warning(self, self.tr("Save File"), error)
+                return
             self.tab_widget.setTabText(self.tab_widget.currentIndex(), Path(filepath).name)
             self._status_bar_mgr.update_language(editor.language)
             self._update_window_title()

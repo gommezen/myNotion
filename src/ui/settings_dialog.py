@@ -142,6 +142,10 @@ class SettingsDialog(QDialog):
         api_group = QGroupBox("API Keys")
         api_layout = QFormLayout(api_group)
 
+        self.ollama_host_edit = QLineEdit()
+        self.ollama_host_edit.setPlaceholderText("http://localhost:11434")
+        api_layout.addRow("Ollama host:", self.ollama_host_edit)
+
         self.anthropic_key_edit = QLineEdit()
         self.anthropic_key_edit.setPlaceholderText("Enter your Anthropic API key...")
         self.anthropic_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
@@ -403,7 +407,8 @@ class SettingsDialog(QDialog):
             font_size = 12
         self.size_combo.setCurrentText(str(font_size))
 
-        # API Keys
+        # API Keys / Hosts
+        self.ollama_host_edit.setText(self.settings.get_ollama_host())
         self.anthropic_key_edit.setText(self.settings.get_anthropic_api_key())
 
         # Auto-Save
@@ -483,7 +488,10 @@ class SettingsDialog(QDialog):
             size = 12
         self.settings.set_font_size(size)
 
-        # Save API keys
+        # Save API keys / hosts
+        ollama_host = self.ollama_host_edit.text().strip()
+        if ollama_host:
+            self.settings.set_ollama_host(ollama_host)
         self.settings.set_anthropic_api_key(self.anthropic_key_edit.text())
 
         # Save auto-save settings

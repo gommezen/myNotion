@@ -392,3 +392,12 @@ class SettingsManager:
     def set_completion_max_lines(self, lines: int):
         """Set maximum lines for completion suggestions."""
         self.settings.setValue("completion_max_lines", max(1, min(10, lines)))
+
+    # Ollama settings
+    def get_ollama_host(self) -> str:
+        """Get the Ollama server URL."""
+        return self.settings.value("ollama_host", "http://localhost:11434")
+
+    def set_ollama_host(self, host: str):
+        """Set the Ollama server URL."""
+        self.settings.setValue("ollama_host", host.rstrip("/"))

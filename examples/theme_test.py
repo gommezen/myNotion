@@ -18,6 +18,10 @@ def main() -> None:
         if os.path.isfile(filename):
             print(f"Processing file: {filename}")
 
+print("Hello")
+
+
+# 
 def main():
     """Main function to execute the program."""
 

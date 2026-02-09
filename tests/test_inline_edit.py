@@ -125,7 +125,7 @@ class TestInlineEditBarWidget:
         bar = InlineEditBar()
         bar.set_generating(True)
         assert not bar.instruction_input.isEnabled()
-        assert bar.status_label.text() == "Generating..."
+        assert bar.status_label.text() == "Generating\u2026"
         bar.deleteLater()
 
     def test_set_generating_false_enables_input(self, qapp):

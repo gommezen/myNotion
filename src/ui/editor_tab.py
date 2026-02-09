@@ -305,8 +305,11 @@ class EditorTab(QPlainTextEdit):
         self.line_number_area.update()
         self._highlight_current_line()
 
-    def load_file(self, filepath: str):
-        """Load content from a file."""
+    def load_file(self, filepath: str) -> str | None:
+        """Load content from a file.
+
+        Returns None on success, or an error message string on failure.
+        """
         self.filepath = filepath
 
         # Detect language from extension
@@ -317,15 +320,27 @@ class EditorTab(QPlainTextEdit):
             with open(filepath, encoding="utf-8") as f:
                 self.setPlainText(f.read())
         except UnicodeDecodeError:
-            # Try with system default encoding
-            with open(filepath) as f:
-                self.setPlainText(f.read())
+            try:
+                with open(filepath) as f:
+                    self.setPlainText(f.read())
+            except (OSError, ValueError) as e:
+                return f"Cannot read file: {e}"
+        except FileNotFoundError:
+            return f"File not found: {filepath}"
+        except PermissionError:
+            return f"Permission denied: {filepath}"
+        except OSError as e:
+            return f"Cannot open file: {e}"
 
         # Mark as unmodified after loading
         self.document().setModified(False)
+        return None
 
-    def save_file(self, filepath: str | None = None):
-        """Save content to a file."""
+    def save_file(self, filepath: str | None = None) -> str | None:
+        """Save content to a file.
+
+        Returns None on success, or an error message string on failure.
+        """
         if filepath:
             self.filepath = filepath
             # Update highlighting for new extension
@@ -333,10 +348,16 @@ class EditorTab(QPlainTextEdit):
             self._set_language(language)
 
         if self.filepath:
-            with open(self.filepath, "w", encoding="utf-8") as f:
-                f.write(self.toPlainText())
+            try:
+                with open(self.filepath, "w", encoding="utf-8") as f:
+                    f.write(self.toPlainText())
+            except PermissionError:
+                return f"Permission denied: {self.filepath}"
+            except OSError as e:
+                return f"Cannot save file: {e}"
             # Mark document as unmodified after successful save
             self.document().setModified(False)
+        return None
 
     def set_language(self, language: Language):
         """Manually set the syntax highlighting language."""

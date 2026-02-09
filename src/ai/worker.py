@@ -10,6 +10,7 @@ from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from ai.providers.anthropic import AnthropicClient
 from ai.providers.ollama import OllamaClient
+from core.settings import SettingsManager
 
 
 class AIWorker(QObject):
@@ -22,7 +23,8 @@ class AIWorker(QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.ollama_client = OllamaClient()
+        host = SettingsManager().get_ollama_host()
+        self.ollama_client = OllamaClient(host=host)
         self.anthropic_client = AnthropicClient()
         self._model = "llama3.1"
         self._prompt = ""
