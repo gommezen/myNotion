@@ -83,121 +83,106 @@ MODEL_ROUTING = {
     },
 }
 
-# AI prompts with icons (card-style layout)
+# AI prompts (card-style layout)
 # Special actions: "transfer", "examples", "custom" have action handlers instead of prompts
 # Each prompt has a "modes" field: ["coding"], ["writing"], or ["coding", "writing"] for shared
 AI_PROMPTS = [
     # Coding-only prompts
     {
         "label": "Explain",
-        "icon": "◎",
-        "prompt": "Provide a brief, concise explanation of this code in 2-3 sentences maximum. Be direct",
-        "tip": "Describe what the code does and how it works",
+        "prompt": "Explain this code in 2-3 sentences. What does it do and why?",
+        "tip": "Describe what the code does",
         "modes": ["coding"],
     },
     {
         "label": "Docstring",
-        "icon": "☰",
-        "prompt": "Add Google-style docstrings to every function and class. Return ONLY the complete code with docstrings added. No explanations",
-        "tip": "Add documentation strings to functions/classes",
+        "prompt": "Add docstrings to all functions and classes. Do not add, remove, or modify any code. Return only the original code with docstrings inserted.",
+        "tip": "Add documentation to functions/classes",
         "modes": ["coding"],
     },
     {
         "label": "Debug",
-        "icon": "⚡",
-        "prompt": "List each bug or issue concisely with line references. Be direct and professional — no lengthy analysis",
-        "tip": "Find bugs and potential issues",
+        "prompt": "List bugs or issues in this code. Format: `line N: issue`. Be concise.",
+        "tip": "Find bugs and issues",
         "modes": ["coding"],
     },
     {
         "label": "Fix",
-        "icon": "✓",
-        "prompt": "Fix all errors in this code. Return ONLY the corrected code. No explanations, no markdown fences",
-        "tip": "Correct errors and issues in code",
+        "prompt": "Fix all errors. Return only the corrected code, no explanation.",
+        "tip": "Correct errors in code",
         "modes": ["coding"],
     },
     {
         "label": "Refactor",
-        "icon": "⟳",
-        "prompt": "Refactor this code to be cleaner and more maintainable. Return the refactored code",
-        "tip": "Restructure code without changing behavior",
+        "prompt": "Refactor for clarity and maintainability. Return only the code.",
+        "tip": "Clean up without changing behavior",
         "modes": ["coding"],
     },
     {
         "label": "Test",
-        "icon": "▣",
-        "prompt": "Generate unit tests for this code",
-        "tip": "Generate unit tests for the code",
+        "prompt": "Generate unit tests using pytest. Return only the test code.",
+        "tip": "Generate unit tests",
         "modes": ["coding"],
     },
     # Writing-only prompts
     {
         "label": "Summarize",
-        "icon": "≡",
-        "prompt": "Summarize this text in 2-3 sentences maximum. Put each sentence on its own line. Be extremely concise",
-        "tip": "Brief overview of the text",
+        "prompt": "Summarize in 2-3 sentences. One sentence per line.",
+        "tip": "Brief overview",
         "modes": ["writing"],
     },
     {
         "label": "Improve",
-        "icon": "▲",
-        "prompt": "Improve this text's clarity, grammar, and readability. Keep the same length and preserve line breaks. Return only the improved text",
-        "tip": "Enhance writing quality and readability",
+        "prompt": "Improve clarity and grammar. Keep same length and structure. Return only the text.",
+        "tip": "Enhance readability",
         "modes": ["writing"],
     },
     {
         "label": "Translate",
-        "icon": "⇄",
         "prompt": None,
         "action": "translate",
-        "tip": "Convert text to a different language",
+        "tip": "Convert to another language",
         "modes": ["writing"],
     },
     {
         "label": "Expand",
-        "icon": "+",
-        "prompt": "Expand this text with more detail, examples, or explanations. Make it about 2x longer. Return only the expanded text",
-        "tip": "Add more depth and detail",
+        "prompt": "Expand with more detail and examples. ~2x length. Return only the text.",
+        "tip": "Add depth and detail",
         "modes": ["writing"],
     },
     {
         "label": "Tone",
-        "icon": "~",
         "prompt": None,
         "action": "tone",
-        "tip": "Change writing tone",
+        "tip": "Change writing style",
         "modes": ["writing"],
     },
     {
         "label": "Shorten",
-        "icon": "-",
-        "prompt": "Shorten this text to about half its length or less. Remove redundancy, keep only essential points. Return only the shortened text, no explanations",
-        "tip": "Make more concise",
+        "prompt": "Cut to ~50% length. Keep essential points only. Return only the text.",
+        "tip": "Make concise",
         "modes": ["writing"],
     },
     # Shared prompts (appear in both modes)
     {
         "label": "Custom",
-        "icon": "✎",
         "prompt": None,
         "action": "custom",
-        "tip": "Enter your own prompt",
+        "tip": "Your own instruction",
         "modes": ["coding", "writing"],
     },
     {
         "label": "Examples",
-        "icon": "⊕",
         "prompt": None,
         "action": "examples",
-        "tip": "Generate more examples from last response",
+        "tip": "More variations",
         "modes": ["coding", "writing"],
     },
     {
         "label": "Transfer",
-        "icon": "↳",
         "prompt": None,
         "action": "transfer",
-        "tip": "Insert last code block into editor",
+        "tip": "Insert into editor",
         "modes": ["coding", "writing"],
     },
 ]
@@ -568,17 +553,9 @@ class SidePanel(QWidget):
             user_instruction = text.strip()
             # Wrap with action-oriented instructions so AI modifies code/text
             if self._layout_mode == LayoutMode.CODING:
-                prompt = (
-                    f"{user_instruction}\n\n"
-                    f"Apply this instruction to the code. "
-                    f"Return ONLY the modified code. No explanations."
-                )
+                prompt = f"{user_instruction}\n\nReturn only the modified code, no explanation."
             else:
-                prompt = (
-                    f"{user_instruction}\n\n"
-                    f"Apply this instruction to the text. "
-                    f"Return ONLY the modified text. No explanations."
-                )
+                prompt = f"{user_instruction}\n\nReturn only the modified text, no explanation."
             # Request context from main window - it will call execute_prompt_with_context
             self.context_requested.emit(prompt)
 
@@ -621,7 +598,7 @@ class SidePanel(QWidget):
                 if not ok or not language.strip():
                     return
                 language = language.strip()
-            prompt = f"Translate this text to {language}. Preserve all line breaks and paragraph structure. Return only the translated text."
+            prompt = f"Translate to {language}. Preserve formatting. Return only the translation."
             self.context_requested.emit(prompt)
 
     def _show_tone_dialog(self):
@@ -658,7 +635,7 @@ class SidePanel(QWidget):
                 if not ok or not tone.strip():
                     return
                 tone = tone.strip()
-            prompt = f"Rewrite this text in a {tone.lower()} tone. Preserve line breaks and paragraph structure. Return only the rewritten text."
+            prompt = f"Rewrite in a {tone.lower()} tone. Preserve structure. Return only the text."
             self.context_requested.emit(prompt)
 
     def _transfer_to_editor(self):
