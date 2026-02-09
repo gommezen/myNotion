@@ -2,13 +2,10 @@
 # tests/test_theme_engine.py — Tests for ThemeEngine and hex_to_rgba
 # =============================================================================
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from core.settings import EditorTheme
 from ui.theme_engine import ThemeEngine, hex_to_rgba
-
 
 # ---------------------------------------------------------------------------
 # hex_to_rgba — pure function tests
@@ -136,12 +133,21 @@ class TestThemeEngine:
     def test_apply_child_themes_skips_missing(self, qapp):
         """apply_child_themes should skip widgets that don't exist."""
         theme = _make_theme()
-        window = MagicMock(spec=[])  # empty spec — no attributes
+
+        # Build a window that only has tab_widget (required) but
+        # none of the optional child widgets.
+        class BareWindow:
+            pass
+
+        window = BareWindow()
+        window.tab_widget = MagicMock()
+        window.tab_widget.count.return_value = 0
+
         settings = MagicMock()
         settings.get_current_theme.return_value = theme
 
         engine = ThemeEngine(window, settings)
-        # Should not raise even though window has no child widgets
+        # Should not raise even though window has no side_panel etc.
         engine.apply_child_themes()
 
     def test_title_bar_qss_skips_when_missing(self, qapp):
