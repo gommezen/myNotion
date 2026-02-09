@@ -1,5 +1,9 @@
 # MyNotion
 
+[![CI](https://github.com/gommezen/myNotion/actions/workflows/ci.yml/badge.svg)](https://github.com/gommezen/myNotion/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![PyQt6](https://img.shields.io/badge/GUI-PyQt6-41cd52.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 
 MyNotion a lightweight text and code editor with AI integration. Think notepad but with syntax highlighting, multiple themes, and local AI assistance via Ollama.
 
@@ -25,7 +29,10 @@ MyNotion a lightweight text and code editor with AI integration. Think notepad b
   - Context toggle to include active editor content in chat
 
 ## Screenshots
-![MyNotion Screenshot](docs/screenshot.png) 
+
+![AI Chat and Syntax Highlighting](docs/screenshot.png)
+![Editor with AI Prompts](docs/screenshot1.png)
+![Model Selector](docs/screenshot2.png)
 
 ## Installation
 
