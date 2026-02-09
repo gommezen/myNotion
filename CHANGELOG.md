@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-02-09
+
 ### Added
 - Copilot-style inline code completion with FIM support (Tab to accept, Esc to dismiss)
 - Ctrl+K inline AI editing with live diff preview
@@ -13,6 +15,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - File I/O error handling with user-friendly messages
 - Configurable Ollama host address
 - Large file guard (syntax highlighting disabled for files over 1 MB)
+- GitHub Actions CI (lint, type check, tests) and release workflow
+- CHANGELOG, LICENSE, and README badges
 
 ### Changed
 - Refactored main_window.py: extracted 5 focused controllers (2515 to 1415 lines)
@@ -23,7 +27,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 - Unicode handling in tests
-- Playground HTML files properly gitignored
+- Mypy type errors in ai/ module and side_panel
 
 ## [0.2.0] - 2026-02-07
 
@@ -67,6 +71,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - Zoom controls (Ctrl+Plus/Minus)
 - Recent files tracking
 
-[Unreleased]: https://github.com/gommezen/myNotion/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/gommezen/myNotion/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/gommezen/myNotion/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/gommezen/myNotion/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/gommezen/myNotion/releases/tag/v0.1.0

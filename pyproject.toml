@@ -4,7 +4,7 @@
 
 [project]
 name = "mynotion"
-version = "0.1.0"
+version = "1.0.0"
 description = "A lightweight text and code editor with local AI integration"
 requires-python = ">=3.11"
 
