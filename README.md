@@ -151,3 +151,6 @@ scripts\quality_check.bat
 # Git Bash / WSL / Linux / macOS
 ./scripts/quality_check.sh
 ```
+### MIT License
+
+Copyright (c) 2025-2026 gommezen
