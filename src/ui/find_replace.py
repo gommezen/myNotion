@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core.settings import SettingsManager
+from ui.theme_engine import hex_to_rgba
 
 
 class FindReplaceBar(QWidget):
@@ -110,19 +111,12 @@ class FindReplaceBar(QWidget):
         self.close_btn.clicked.connect(self.hide_bar)
         layout.addWidget(self.close_btn)
 
-    @staticmethod
-    def _hex_to_rgba(hex_color: str, alpha: float) -> str:
-        """Convert hex color to rgba() CSS string."""
-        h = hex_color.lstrip("#")
-        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        return f"rgba({r},{g},{b},{alpha})"
-
     def _apply_style(self):
         """Apply current theme styling."""
         theme = self._settings.get_current_theme()
         bg = theme.chrome_bg
         text = theme.foreground
-        text_dim = self._hex_to_rgba(theme.foreground, 0.6)
+        text_dim = hex_to_rgba(theme.foreground, 0.6)
         border = theme.chrome_border
         input_bg = theme.background
         accent = theme.keyword

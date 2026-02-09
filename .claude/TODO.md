@@ -2,14 +2,12 @@
 
 ## Next Up
 
-- [ ] **Refactor `main_window.py` (2515 lines)** — Extract one piece at a time:
-  1. [ ] `ThemeApplicator` — all QSS generation and theme application
-  2. [ ] `TitleBarWidget` — custom title bar, min/max/close, drag handling
-  3. [ ] `TabManager` — tab creation, `+` button positioning, session restore
-  4. [ ] `StatusBarManager` — status bar setup and updates
-  5. [ ] `InlineEditController` — Ctrl+K inline AI edit system
-  6. [ ] `CompletionController` — AI code completion toggle, model selection
-  7. [ ] Keep `MainWindow` as orchestrator wiring these together
+- [x] **Refactor `main_window.py` (2515 → 1415 lines)** — Extracted 5 focused classes:
+  1. [x] `StatusBarManager` — status bar setup and updates (~80 lines)
+  2. [x] `InlineEditController` — Ctrl+K inline AI edit system (~190 lines)
+  3. [x] `CompletionController` — AI code completion toggle, model selection (~130 lines)
+  4. [x] `ThemeEngine` — all QSS generation and theme application (~410 lines) + centralized `hex_to_rgba`
+  5. [x] `TitleBarController` — custom title bar, min/max/close, drag, resize grips (~270 lines)
 
 - [ ] **Review `side_panel.py` (1537 lines)** — Identify extraction candidates after main_window is done
 

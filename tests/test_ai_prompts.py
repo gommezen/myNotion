@@ -11,10 +11,9 @@ class TestPromptDefinitions:
     """Verify all AI_PROMPTS entries have required fields."""
 
     def test_all_prompts_have_required_fields(self):
-        """Every prompt must have label, icon, and modes."""
+        """Every prompt must have label and modes."""
         for i, prompt in enumerate(AI_PROMPTS):
             assert "label" in prompt, f"Prompt {i} missing 'label'"
-            assert "icon" in prompt, f"Prompt {i} missing 'icon'"
             assert "modes" in prompt, f"Prompt {i} ({prompt['label']}) missing 'modes'"
 
     def test_all_prompts_have_prompt_or_action(self):
@@ -51,7 +50,7 @@ def _labels_for_mode(mode: str) -> set[str]:
 class TestModeCategories:
     """Verify prompts are assigned to the correct modes."""
 
-    CODING_ONLY = {"Explain", "Docstring", "Simplify", "Debug", "Fix", "Refactor", "Test"}
+    CODING_ONLY = {"Explain", "Docstring", "Debug", "Fix", "Refactor", "Test"}
     WRITING_ONLY = {"Summarize", "Improve", "Translate", "Expand", "Tone", "Shorten"}
     SHARED = {"Custom", "Examples", "Transfer"}
 
@@ -95,7 +94,7 @@ class TestPromptsGrid:
         panel = create_side_panel(layout_mode=LayoutMode.CODING)
         qtbot.addWidget(panel)
 
-        button_labels = {btn.text().split(" ", 1)[1] for btn in panel.prompt_buttons}
+        button_labels = {btn.text() for btn in panel.prompt_buttons}
         # All coding prompts + shared should be present
         for label in TestModeCategories.CODING_ONLY | TestModeCategories.SHARED:
             assert label in button_labels, f"'{label}' not found in coding mode buttons"
@@ -107,7 +106,7 @@ class TestPromptsGrid:
         panel = create_side_panel(layout_mode=LayoutMode.WRITING)
         qtbot.addWidget(panel)
 
-        button_labels = {btn.text().split(" ", 1)[1] for btn in panel.prompt_buttons}
+        button_labels = {btn.text() for btn in panel.prompt_buttons}
         for label in TestModeCategories.WRITING_ONLY | TestModeCategories.SHARED:
             assert label in button_labels, f"'{label}' not found in writing mode buttons"
         for label in TestModeCategories.CODING_ONLY:
@@ -117,13 +116,13 @@ class TestPromptsGrid:
         panel = create_side_panel(layout_mode=LayoutMode.CODING)
         qtbot.addWidget(panel)
 
-        coding_count = len(panel.prompt_buttons)
+        coding_labels = {btn.text() for btn in panel.prompt_buttons}
 
         panel.set_layout_mode(LayoutMode.WRITING)
-        writing_count = len(panel.prompt_buttons)
+        writing_labels = {btn.text() for btn in panel.prompt_buttons}
 
-        # Counts should differ (coding has 7+3=10, writing has 6+3=9)
-        assert coding_count != writing_count
+        # Labels should differ between modes (different prompts shown)
+        assert coding_labels != writing_labels
 
     def test_mode_switch_emits_signal(self, create_side_panel, qtbot):
         panel = create_side_panel(layout_mode=LayoutMode.CODING)

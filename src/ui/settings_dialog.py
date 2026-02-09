@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core.settings import THEMES, SettingsManager
+from ui.theme_engine import hex_to_rgba
 
 # Models available for code completion
 COMPLETION_MODELS = [
@@ -235,13 +236,6 @@ class SettingsDialog(QDialog):
         pixmap.save(path)
         return path.replace("\\", "/")
 
-    @staticmethod
-    def _hex_to_rgba(hex_color: str, alpha: float) -> str:
-        """Convert hex color to rgba() CSS string."""
-        h = hex_color.lstrip("#")
-        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        return f"rgba({r},{g},{b},{alpha})"
-
     def _apply_dark_style(self):
         """Apply current theme styling to the dialog."""
         theme = self.settings.get_current_theme()
@@ -263,9 +257,9 @@ class SettingsDialog(QDialog):
             input_border = f"border: 1px solid {chrome_border};"
             check_border = f"border: 1px solid {chrome_border};"
 
-        dim = self._hex_to_rgba(fg, 0.6)
-        btn_bg = self._hex_to_rgba(fg, 0.06)
-        btn_hover_bg = self._hex_to_rgba(fg, 0.12)
+        dim = hex_to_rgba(fg, 0.6)
+        btn_bg = hex_to_rgba(fg, 0.06)
+        btn_hover_bg = hex_to_rgba(fg, 0.12)
 
         self.setStyleSheet(f"""
             QDialog {{

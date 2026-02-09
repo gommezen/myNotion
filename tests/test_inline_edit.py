@@ -259,46 +259,46 @@ class TestStripCodeFences:
 
     def test_strips_opening_and_closing_fences(self):
         """Should remove ```python and ``` wrappers."""
-        from ui.main_window import MainWindow
+        from ui.inline_edit_controller import InlineEditController
 
         code = "```python\ndef hello():\n    return 'hi'\n```"
-        result = MainWindow._strip_code_fences(code)
+        result = InlineEditController._strip_code_fences(code)
         assert result == "def hello():\n    return 'hi'"
 
     def test_strips_plain_fences(self):
         """Should remove plain ``` fences."""
-        from ui.main_window import MainWindow
+        from ui.inline_edit_controller import InlineEditController
 
         code = "```\nx = 1\n```"
-        result = MainWindow._strip_code_fences(code)
+        result = InlineEditController._strip_code_fences(code)
         assert result == "x = 1"
 
     def test_no_fences_unchanged(self):
         """Code without fences should be returned as-is."""
-        from ui.main_window import MainWindow
+        from ui.inline_edit_controller import InlineEditController
 
         code = "x = 1\ny = 2"
-        result = MainWindow._strip_code_fences(code)
+        result = InlineEditController._strip_code_fences(code)
         assert result == "x = 1\ny = 2"
 
     def test_empty_string(self):
         """Empty string should return empty."""
-        from ui.main_window import MainWindow
+        from ui.inline_edit_controller import InlineEditController
 
-        result = MainWindow._strip_code_fences("")
+        result = InlineEditController._strip_code_fences("")
         assert result == ""
 
     def test_only_fences(self):
         """Response with only fences should return empty."""
-        from ui.main_window import MainWindow
+        from ui.inline_edit_controller import InlineEditController
 
-        result = MainWindow._strip_code_fences("```\n```")
+        result = InlineEditController._strip_code_fences("```\n```")
         assert result == ""
 
     def test_preserves_internal_backticks(self):
         """Internal backticks (not fences) should be preserved."""
-        from ui.main_window import MainWindow
+        from ui.inline_edit_controller import InlineEditController
 
         code = "```python\nprint(`x`)\n```"
-        result = MainWindow._strip_code_fences(code)
+        result = InlineEditController._strip_code_fences(code)
         assert "print(`x`)" in result

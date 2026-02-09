@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core.settings import SettingsManager
+from ui.theme_engine import hex_to_rgba
 
 
 class FileBrowserPanel(QWidget):
@@ -104,22 +105,15 @@ class FileBrowserPanel(QWidget):
         if Path(filepath).is_file():
             self.file_selected.emit(filepath)
 
-    @staticmethod
-    def _hex_to_rgba(hex_color: str, alpha: float) -> str:
-        """Convert hex color to rgba() CSS string."""
-        h = hex_color.lstrip("#")
-        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        return f"rgba({r},{g},{b},{alpha})"
-
     def _apply_style(self):
         """Apply current theme styling."""
         theme = SettingsManager().get_current_theme()
         bg = theme.background
         fg = theme.foreground
-        text_main = self._hex_to_rgba(fg, 0.65)
-        text_dim = self._hex_to_rgba(fg, 0.5)
-        selection_bg = self._hex_to_rgba(fg, 0.15)
-        hover_bg = self._hex_to_rgba(fg, 0.08)
+        text_main = hex_to_rgba(fg, 0.65)
+        text_dim = hex_to_rgba(fg, 0.5)
+        selection_bg = hex_to_rgba(fg, 0.15)
+        hover_bg = hex_to_rgba(fg, 0.08)
 
         self.setStyleSheet(f"""
             QWidget {{
@@ -198,12 +192,12 @@ class FileBrowserPanel(QWidget):
                 margin: 0;
             }}
             QScrollBar::handle:vertical {{
-                background: {self._hex_to_rgba(fg, 0.2)};
+                background: {hex_to_rgba(fg, 0.2)};
                 border-radius: {theme.radius};
                 min-height: 30px;
             }}
             QScrollBar::handle:vertical:hover {{
-                background: {self._hex_to_rgba(fg, 0.3)};
+                background: {hex_to_rgba(fg, 0.3)};
             }}
             QScrollBar::add-line:vertical,
             QScrollBar::sub-line:vertical {{

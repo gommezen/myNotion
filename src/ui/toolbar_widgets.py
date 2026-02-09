@@ -12,6 +12,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ui.theme_engine import hex_to_rgba
+
 
 class FormattingToolbar(QWidget):
     """Inline formatting toolbar containing all format buttons."""
@@ -75,16 +77,9 @@ class FormattingToolbar(QWidget):
         self.clear_btn.clicked.connect(self.clear_format_clicked.emit)
         layout.addWidget(self.clear_btn)
 
-    @staticmethod
-    def _hex_to_rgba(hex_color: str, alpha: float) -> str:
-        """Convert hex color to rgba() CSS string."""
-        h = hex_color.lstrip("#")
-        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        return f"rgba({r},{g},{b},{alpha})"
-
     def apply_theme(self, theme: Any):
         """Apply theme colors to all buttons."""
-        fg_mid = self._hex_to_rgba(theme.foreground, 0.55)
+        fg_mid = hex_to_rgba(theme.foreground, 0.55)
         if theme.is_beveled:
             button_style = f"""
                 QToolButton {{
@@ -109,7 +104,7 @@ class FormattingToolbar(QWidget):
                 }}
             """
         else:
-            pressed_bg = self._hex_to_rgba(theme.keyword, 0.15)
+            pressed_bg = hex_to_rgba(theme.keyword, 0.15)
             button_style = f"""
                 QToolButton {{
                     background-color: {theme.chrome_hover};
@@ -122,7 +117,7 @@ class FormattingToolbar(QWidget):
                 }}
                 QToolButton:hover {{
                     color: {theme.foreground};
-                    border: 1px solid {self._hex_to_rgba(theme.foreground, 0.3)};
+                    border: 1px solid {hex_to_rgba(theme.foreground, 0.3)};
                 }}
                 QToolButton:pressed {{
                     background-color: {pressed_bg};

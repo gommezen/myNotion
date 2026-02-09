@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 
 from ai.worker import AIManager
 from core.settings import SettingsManager
+from ui.theme_engine import hex_to_rgba
 
 
 class LayoutMode(Enum):
@@ -384,7 +385,7 @@ class SidePanel(QWidget):
         elif focused:
             self.input_row_widget.setStyleSheet(f"""
                 QWidget {{
-                    background: {self._hex_to_rgba(fg, 0.02)};
+                    background: {hex_to_rgba(fg, 0.02)};
                     border: 1px solid {theme.keyword};
                     border-radius: 6px;
                 }}
@@ -392,7 +393,7 @@ class SidePanel(QWidget):
         else:
             self.input_row_widget.setStyleSheet(f"""
                 QWidget {{
-                    background: {self._hex_to_rgba(fg, 0.02)};
+                    background: {hex_to_rgba(fg, 0.02)};
                     border: 1px solid {theme.chrome_border};
                     border-radius: 6px;
                 }}
@@ -1137,13 +1138,6 @@ class SidePanel(QWidget):
         """Public method for external theme updates."""
         self._apply_theme()
 
-    @staticmethod
-    def _hex_to_rgba(hex_color: str, alpha: float) -> str:
-        """Convert hex color to rgba() CSS string."""
-        h = hex_color.lstrip("#")
-        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        return f"rgba({r},{g},{b},{alpha})"
-
     def _apply_prompt_button_styles(self):
         """Apply styles to prompt buttons (called from _apply_theme and _rebuild_prompts_grid)."""
         theme = self.settings_manager.get_current_theme()
@@ -1156,14 +1150,14 @@ class SidePanel(QWidget):
                     QPushButton {{
                         background: {theme.chrome_hover};
                         {theme.bevel_raised}
-                        color: {self._hex_to_rgba(fg, 0.5)};
+                        color: {hex_to_rgba(fg, 0.5)};
                         font-family: 'Consolas', 'SF Mono', monospace;
                         font-size: 11px;
                         padding: 5px 2px;
                         text-align: center;
                     }}
                     QPushButton:hover {{
-                        color: {self._hex_to_rgba(fg, 0.8)};
+                        color: {hex_to_rgba(fg, 0.8)};
                     }}
                     QPushButton:pressed {{
                         background: {theme.chrome_bg};
@@ -1172,23 +1166,23 @@ class SidePanel(QWidget):
                     }}
                 """)
         else:
-            pressed_bg = self._hex_to_rgba(accent, 0.15)
+            pressed_bg = hex_to_rgba(accent, 0.15)
             for btn in self.prompt_buttons:
                 btn.setStyleSheet(f"""
                     QPushButton {{
-                        background: {self._hex_to_rgba(fg, 0.04)};
-                        border: 1px solid {self._hex_to_rgba(fg, 0.12)};
+                        background: {hex_to_rgba(fg, 0.04)};
+                        border: 1px solid {hex_to_rgba(fg, 0.12)};
                         border-radius: 6px;
-                        color: {self._hex_to_rgba(fg, 0.55)};
+                        color: {hex_to_rgba(fg, 0.55)};
                         font-family: 'Consolas', 'SF Mono', monospace;
                         font-size: 11px;
                         padding: 5px 2px;
                         text-align: center;
                     }}
                     QPushButton:hover {{
-                        background: {self._hex_to_rgba(fg, 0.1)};
-                        border: 1px solid {self._hex_to_rgba(fg, 0.2)};
-                        color: {self._hex_to_rgba(fg, 0.85)};
+                        background: {hex_to_rgba(fg, 0.1)};
+                        border: 1px solid {hex_to_rgba(fg, 0.2)};
+                        color: {hex_to_rgba(fg, 0.85)};
                     }}
                     QPushButton:pressed {{
                         background: {pressed_bg};
@@ -1207,7 +1201,7 @@ class SidePanel(QWidget):
         menu_border = (
             theme.bevel_raised
             if theme.is_beveled
-            else f"border: 1px solid {self._hex_to_rgba(fg, 0.15)};"
+            else f"border: 1px solid {hex_to_rgba(fg, 0.15)};"
         )
 
         return f"""
@@ -1221,19 +1215,19 @@ class SidePanel(QWidget):
             }}
             QMenu::item {{
                 background-color: transparent;
-                color: {self._hex_to_rgba(fg, 0.6)};
+                color: {hex_to_rgba(fg, 0.6)};
                 padding: 7px 12px;
                 border-radius: {theme.radius};
                 font-size: 11px;
                 margin: 1px 4px;
             }}
             QMenu::item:selected {{
-                background-color: {self._hex_to_rgba(fg, 0.08)};
+                background-color: {hex_to_rgba(fg, 0.08)};
                 color: {accent};
             }}
             QMenu::separator {{
                 height: 1px;
-                background: {self._hex_to_rgba(fg, 0.1)};
+                background: {hex_to_rgba(fg, 0.1)};
                 margin: 5px 10px;
             }}
             QMenu::right-arrow {{
@@ -1264,7 +1258,7 @@ class SidePanel(QWidget):
                 QPushButton {{
                     background: transparent;
                     border: none;
-                    color: {self._hex_to_rgba(fg, 0.4)};
+                    color: {hex_to_rgba(fg, 0.4)};
                     font-size: 16px;
                     font-weight: bold;
                 }}
@@ -1280,7 +1274,7 @@ class SidePanel(QWidget):
         self.setStyleSheet(f"""
             QWidget {{
                 background-color: {chrome_bg};
-                color: {self._hex_to_rgba(fg, 0.65)};
+                color: {hex_to_rgba(fg, 0.65)};
                 font-family: 'Consolas', 'SF Mono', monospace;
             }}
         """)
@@ -1294,10 +1288,10 @@ class SidePanel(QWidget):
                 title_bg = (
                     f"qlineargradient(x1:0,y1:0,x2:1,y2:0,"
                     f"stop:0 {theme._darken(chrome_bg, 10)},"
-                    f"stop:0.5 {self._hex_to_rgba(theme.keyword, 0.09)},"
+                    f"stop:0.5 {hex_to_rgba(theme.keyword, 0.09)},"
                     f"stop:1 {chrome_bg})"
                 )
-                title_border = f"border-bottom: 1px solid {self._hex_to_rgba(fg, 0.08)};"
+                title_border = f"border-bottom: 1px solid {hex_to_rgba(fg, 0.08)};"
             self.title_bar.setStyleSheet(f"""
                 QWidget {{
                     background: {title_bg};
@@ -1315,11 +1309,11 @@ class SidePanel(QWidget):
                 QToolButton {{
                     background: transparent;
                     border: none;
-                    color: {self._hex_to_rgba(fg, 0.3)};
+                    color: {hex_to_rgba(fg, 0.3)};
                     font-size: 14px;
                 }}
                 QToolButton:hover {{
-                    color: {self._hex_to_rgba(fg, 0.7)};
+                    color: {hex_to_rgba(fg, 0.7)};
                 }}
             """)
 
@@ -1353,7 +1347,7 @@ class SidePanel(QWidget):
         self.prompts_label.setStyleSheet(f"""
             QLabel {{
                 background: transparent;
-                color: {self._hex_to_rgba(fg, 0.4)};
+                color: {hex_to_rgba(fg, 0.4)};
                 font-size: 10px;
                 font-weight: 600;
                 padding: 2px 0;
@@ -1378,7 +1372,7 @@ class SidePanel(QWidget):
                     text-align: left;
                 }}
                 QToolButton:hover {{
-                    color: {self._hex_to_rgba(fg, 0.8)};
+                    color: {hex_to_rgba(fg, 0.8)};
                 }}
                 QToolButton:pressed {{
                     background: {theme.chrome_bg};
@@ -1390,20 +1384,20 @@ class SidePanel(QWidget):
                 }}
             """)
         else:
-            pressed_bg = self._hex_to_rgba(accent, 0.15)
+            pressed_bg = hex_to_rgba(accent, 0.15)
             self.model_btn.setStyleSheet(f"""
                 QToolButton {{
-                    background: {self._hex_to_rgba(fg, 0.04)};
-                    border: 1px solid {self._hex_to_rgba(fg, 0.12)};
+                    background: {hex_to_rgba(fg, 0.04)};
+                    border: 1px solid {hex_to_rgba(fg, 0.12)};
                     border-radius: 6px;
-                    color: {self._hex_to_rgba(fg, 0.55)};
+                    color: {hex_to_rgba(fg, 0.55)};
                     font-size: 11px;
                     padding: 3px 8px;
                     text-align: left;
                 }}
                 QToolButton:hover {{
-                    border: 1px solid {self._hex_to_rgba(fg, 0.2)};
-                    color: {self._hex_to_rgba(fg, 0.8)};
+                    border: 1px solid {hex_to_rgba(fg, 0.2)};
+                    color: {hex_to_rgba(fg, 0.8)};
                 }}
                 QToolButton:pressed {{
                     background: {pressed_bg};
@@ -1418,9 +1412,7 @@ class SidePanel(QWidget):
 
         # Model menu
         model_menu_border = (
-            theme.bevel_raised
-            if theme.is_beveled
-            else f"border: 1px solid {self._hex_to_rgba(fg, 0.1)};"
+            theme.bevel_raised if theme.is_beveled else f"border: 1px solid {hex_to_rgba(fg, 0.1)};"
         )
         menu_style = f"""
             QMenu {{
@@ -1431,13 +1423,13 @@ class SidePanel(QWidget):
                 font-size: 10px;
             }}
             QMenu::item {{
-                color: {self._hex_to_rgba(fg, 0.6)};
+                color: {hex_to_rgba(fg, 0.6)};
                 padding: 6px 12px;
                 font-size: 10px;
             }}
             QMenu::item:selected {{
-                color: {self._hex_to_rgba(fg, 0.8)};
-                background: {self._hex_to_rgba(fg, 0.08)};
+                color: {hex_to_rgba(fg, 0.8)};
+                background: {hex_to_rgba(fg, 0.08)};
             }}
         """
         if self.model_btn.menu():
@@ -1459,7 +1451,7 @@ class SidePanel(QWidget):
         else:
             self.input_row_widget.setStyleSheet(f"""
                 QWidget {{
-                    background: {self._hex_to_rgba(fg, 0.02)};
+                    background: {hex_to_rgba(fg, 0.02)};
                     border: 1px solid {theme.chrome_border};
                     border-radius: 6px;
                 }}
@@ -1478,8 +1470,8 @@ class SidePanel(QWidget):
 
         # Send button — visible button with accent flash on press
         accent = theme.keyword
-        fg_mid = self._hex_to_rgba(fg, 0.55)
-        pressed_bg = self._hex_to_rgba(accent, 0.25)
+        fg_mid = hex_to_rgba(fg, 0.55)
+        pressed_bg = hex_to_rgba(accent, 0.25)
         if theme.is_beveled:
             self.send_btn.setStyleSheet(f"""
                 QPushButton {{
@@ -1491,7 +1483,7 @@ class SidePanel(QWidget):
                     padding: 5px 12px;
                 }}
                 QPushButton:hover {{
-                    background: {self._hex_to_rgba(accent, 0.1)};
+                    background: {hex_to_rgba(accent, 0.1)};
                     color: {accent};
                 }}
                 QPushButton:pressed {{
@@ -1512,7 +1504,7 @@ class SidePanel(QWidget):
                     padding: 5px 12px;
                 }}
                 QPushButton:hover {{
-                    background: {self._hex_to_rgba(accent, 0.12)};
+                    background: {hex_to_rgba(accent, 0.12)};
                     border: 1px solid {accent};
                     color: {accent};
                 }}
