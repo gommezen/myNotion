@@ -72,6 +72,9 @@ design_decisions.pdf
 # Playground files
 *-playground.html
 
+# Examples
+examples/
+
 # Security - never commit secrets
 *.pem
 *.key
