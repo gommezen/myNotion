@@ -30,11 +30,13 @@ class InlineEditController(QObject):
         get_editor: Callable[[], EditorTab | None],
         get_model_id: Callable[[], str],
         get_layout_mode: Callable[[], LayoutMode],
+        show_status: Callable[[str, int], None] | None = None,
     ):
         super().__init__(parent)
         self._get_editor = get_editor
         self._get_model_id = get_model_id
         self._get_layout_mode = get_layout_mode
+        self._show_status = show_status
 
         # AI backend
         self._manager = AIManager(parent)
@@ -159,6 +161,9 @@ class InlineEditController(QObject):
 
         model = self._get_model_id()
 
+        if self._show_status:
+            self._show_status("AI generating\u2026", 0)
+
         self._manager.generate(
             model=model,
             prompt=prompt,
@@ -206,6 +211,9 @@ class InlineEditController(QObject):
             bar.set_status("Enter/Tab = accept, Esc = undo")
             bar.set_generating(False)
 
+        if self._show_status:
+            self._show_status("AI edit ready — Enter to accept, Esc to undo", 5000)
+
     def _on_error(self, error: str) -> None:
         """Handle AI generation error."""
         self._active = False
@@ -214,6 +222,8 @@ class InlineEditController(QObject):
             bar = editor.get_inline_edit_bar()
             if bar:
                 bar.set_error(error)
+        if self._show_status:
+            self._show_status("AI edit failed", 3000)
 
     def _on_cancelled(self) -> None:
         """Handle cancel: stop generation, undo if edit was made, hide bar."""

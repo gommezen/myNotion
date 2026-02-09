@@ -2,6 +2,9 @@
 Editor tab widget - handles individual document editing.
 """
 
+import logging
+import os
+
 from PyQt6.QtCore import QRect, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QFontDatabase, QPainter, QTextFormat
 from PyQt6.QtWidgets import QPlainTextEdit, QTextEdit, QWidget
@@ -12,6 +15,12 @@ from syntax.highlighter import (
     create_highlighter,
     get_language_from_extension,
 )
+
+logger = logging.getLogger(__name__)
+
+# File size thresholds (bytes)
+_LARGE_FILE_THRESHOLD = 1_000_000  # 1 MB — disable syntax highlighting
+_MAX_FILE_SIZE = 50_000_000  # 50 MB — refuse to open
 
 
 class LineNumberArea(QWidget):
@@ -309,12 +318,26 @@ class EditorTab(QPlainTextEdit):
         """Load content from a file.
 
         Returns None on success, or an error message string on failure.
+        Large files (>1 MB) load with syntax highlighting disabled.
         """
         self.filepath = filepath
 
+        # Check file size before reading
+        try:
+            file_size = os.path.getsize(filepath)
+        except OSError:
+            file_size = 0  # Let the open() call handle the actual error
+
+        is_large = file_size > _LARGE_FILE_THRESHOLD
+
         # Detect language from extension
         language = get_language_from_extension(filepath)
-        self._set_language(language)
+        if is_large:
+            # Disable syntax highlighting for large files
+            self._set_language(Language.PLAIN)
+            logger.info("Large file (%d bytes) — syntax highlighting disabled", file_size)
+        else:
+            self._set_language(language)
 
         try:
             with open(filepath, encoding="utf-8") as f:
@@ -331,6 +354,9 @@ class EditorTab(QPlainTextEdit):
             return f"Permission denied: {filepath}"
         except OSError as e:
             return f"Cannot open file: {e}"
+
+        # Store the detected language even if highlighting is off
+        self.language = language
 
         # Mark as unmodified after loading
         self.document().setModified(False)

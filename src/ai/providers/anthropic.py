@@ -79,13 +79,25 @@ class AnthropicClient:
                 client.stream("POST", self.BASE_URL, headers=headers, json=payload) as response,
             ):
                 if response.status_code == 401:
-                    yield "[Error: Invalid API key. Check your Anthropic API key in Settings.]"
+                    yield "[Error: Invalid API key. Check your Anthropic API key in Edit > Settings.]"
                     return
                 elif response.status_code == 429:
-                    yield "[Error: Rate limited. Please wait and try again.]"
+                    yield "[Error: Rate limited. Please wait a moment and try again.]"
+                    return
+                elif response.status_code == 403:
+                    yield "[Error: Access denied. Your API key may lack permissions for this model.]"
+                    return
+                elif response.status_code == 404:
+                    yield f"[Error: Model '{model}' not found. Check the model name.]"
+                    return
+                elif response.status_code == 529:
+                    yield "[Error: Anthropic API is overloaded. Please try again in a few seconds.]"
+                    return
+                elif response.status_code >= 500:
+                    yield f"[Error: Anthropic server error ({response.status_code}). Try again shortly.]"
                     return
                 elif response.status_code != 200:
-                    yield f"[Error: API returned status {response.status_code}]"
+                    yield f"[Error: Unexpected API response ({response.status_code}).]"
                     return
 
                 # Process SSE stream

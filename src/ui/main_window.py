@@ -78,6 +78,7 @@ class MainWindow(QMainWindow):
             self.current_editor,
             lambda: self.side_panel.current_model["id"],
             self.side_panel.get_layout_mode,
+            show_status=self._status_bar_mgr.show_message,
         )
         self._inline_edit_ctrl.setup(self)
         self._theme_engine = ThemeEngine(self, self.settings_manager)
@@ -978,6 +979,26 @@ class MainWindow(QMainWindow):
 
     def _open_file_path(self, filepath: str):
         """Open a specific file path in a new tab."""
+        # Warn before opening very large files
+        try:
+            file_size = Path(filepath).stat().st_size
+            if file_size > 50_000_000:
+                size_mb = file_size / 1_000_000
+                result = QMessageBox.warning(
+                    self,
+                    self.tr("Large File"),
+                    self.tr(
+                        f"This file is {size_mb:.1f} MB. Opening very large files "
+                        f"may be slow.\n\nOpen anyway?"
+                    ),
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if result != QMessageBox.StandardButton.Yes:
+                    return
+        except OSError:
+            pass  # Let load_file handle the actual error
+
         editor = self.new_tab()
         error = editor.load_file(filepath)
         if error:
@@ -991,6 +1012,20 @@ class MainWindow(QMainWindow):
         self._status_bar_mgr.update_language(editor.language)
         self._update_window_title()
         self.recent_files.add_file(filepath)
+
+        # Show status with large file warning if applicable
+        name = Path(filepath).name
+        try:
+            size = Path(filepath).stat().st_size
+            if size > 1_000_000:
+                size_mb = size / 1_000_000
+                self._status_bar_mgr.show_message(
+                    f"Opened {name} ({size_mb:.1f} MB — syntax highlighting disabled)", 5000
+                )
+            else:
+                self._status_bar_mgr.show_message(f"Opened {name}", 3000)
+        except OSError:
+            self._status_bar_mgr.show_message(f"Opened {name}", 3000)
 
     # Tab management
     def new_tab(self):
@@ -1104,6 +1139,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, self.tr("Save File"), error)
                 return
             self.recent_files.add_file(editor.filepath)
+            self._status_bar_mgr.show_message(f"Saved {Path(editor.filepath).name}", 3000)
         else:
             self.save_file_as()
 
@@ -1130,6 +1166,7 @@ class MainWindow(QMainWindow):
             self._status_bar_mgr.update_language(editor.language)
             self._update_window_title()
             self.recent_files.add_file(filepath)
+            self._status_bar_mgr.show_message(f"Saved {Path(filepath).name}", 3000)
 
     # Edit operations (delegate to current editor)
     def _undo(self):

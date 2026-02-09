@@ -12,14 +12,15 @@ import os
 # Specify the types of variables that may or may not be present
 from typing import List, Optional
 
+import os
+
 def main() -> None:
     # Perform some operation on the files in the current directory
     for filename in os.listdir():
         if os.path.isfile(filename):
             print(f"Processing file: {filename}")
 
-print("Hello")
-
+main()
 
 # 
 def main():
