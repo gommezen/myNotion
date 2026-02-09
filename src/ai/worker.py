@@ -21,20 +21,20 @@ class AIWorker(QObject):
     generation_finished = pyqtSignal()  # Generation complete
     generation_error = pyqtSignal(str)  # Error message
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         host = SettingsManager().get_ollama_host()
         self.ollama_client = OllamaClient(host=host)
         self.anthropic_client = AnthropicClient()
         self._model = "llama3.1"
         self._prompt = ""
-        self._context = None
+        self._context: str | None = None
         self._mode = "coding"
         self._cancelled = False
 
     def set_request(
         self, model: str, prompt: str, context: str | None = None, mode: str = "coding"
-    ):
+    ) -> None:
         """Set the request parameters before starting.
 
         Args:
@@ -49,11 +49,11 @@ class AIWorker(QObject):
         self._mode = mode
         self._cancelled = False
 
-    def cancel(self):
+    def cancel(self) -> None:
         """Request cancellation of the current generation."""
         self._cancelled = True
 
-    def run(self):
+    def run(self) -> None:
         """Run the generation (called from thread)."""
         try:
             asyncio.run(self._async_generate())
@@ -67,14 +67,14 @@ class AIWorker(QObject):
         """Check if the model is an Anthropic/Claude model."""
         return "claude" in model.lower() or "haiku" in model.lower()
 
-    async def _async_generate(self):
+    async def _async_generate(self) -> None:
         """Async generation with streaming."""
         try:
             # Choose provider based on model
             if self._is_anthropic_model(self._model):
                 # Use Anthropic API - map model ID to actual API model
                 api_model = "claude-3-haiku-20240307"  # Default to Haiku
-                client = self.anthropic_client
+                client: AnthropicClient | OllamaClient = self.anthropic_client
             else:
                 # Use Ollama for local models
                 api_model = self._model
@@ -109,7 +109,7 @@ class _WorkerThread(QThread):
         super().__init__()
         self._worker = worker
 
-    def run(self):
+    def run(self) -> None:
         """Execute the worker and exit — no event loop needed."""
         self._worker.run()
 
@@ -130,12 +130,14 @@ class AIManager(QObject):
     generation_finished = pyqtSignal()
     generation_error = pyqtSignal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._thread: _WorkerThread | None = None
         self._worker: AIWorker | None = None
 
-    def generate(self, model: str, prompt: str, context: str | None = None, mode: str = "coding"):
+    def generate(
+        self, model: str, prompt: str, context: str | None = None, mode: str = "coding"
+    ) -> None:
         """
         Start an AI generation request.
 
@@ -166,7 +168,7 @@ class AIManager(QObject):
         # Start the thread (calls _WorkerThread.run → worker.run)
         self._thread.start()
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop current generation."""
         # Signal the worker to cancel — this makes the async loop exit early
         if self._worker:
@@ -186,7 +188,7 @@ class AIManager(QObject):
 
         self._clear_refs()
 
-    def _clear_refs(self):
+    def _clear_refs(self) -> None:
         """Clear references to thread and worker (Qt handles actual deletion)."""
         self._worker = None
         self._thread = None

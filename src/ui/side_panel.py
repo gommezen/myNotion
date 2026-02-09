@@ -87,7 +87,7 @@ MODEL_ROUTING = {
 # AI prompts (card-style layout)
 # Special actions: "transfer", "examples", "custom" have action handlers instead of prompts
 # Each prompt has a "modes" field: ["coding"], ["writing"], or ["coding", "writing"] for shared
-AI_PROMPTS = [
+AI_PROMPTS: list[dict[str, str | list[str] | None]] = [
     # Coding-only prompts
     {
         "label": "Explain",
@@ -463,7 +463,7 @@ class SidePanel(QWidget):
         # Filter prompts for the current mode
         mode_value = self._layout_mode.value
         filtered_prompts = [
-            p for p in AI_PROMPTS if mode_value in p.get("modes", ["coding", "writing"])
+            p for p in AI_PROMPTS if mode_value in (p.get("modes") or ["coding", "writing"])
         ]
 
         # Create buttons for filtered prompts

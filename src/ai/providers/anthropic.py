@@ -16,7 +16,7 @@ class AnthropicClient:
     BASE_URL = "https://api.anthropic.com/v1/messages"
     API_VERSION = "2023-06-01"
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.settings = SettingsManager()
 
     def _get_api_key(self) -> str:
