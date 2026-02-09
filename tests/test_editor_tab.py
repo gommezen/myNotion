@@ -95,3 +95,55 @@ class TestEditorTabSave:
         tab.save_file(str(save_path))
 
         assert tab.filepath == str(save_path)
+
+
+class TestEditorTabLanguage:
+    """Tests for language detection and setting."""
+
+    def test_set_language(self, create_editor_tab, qtbot):
+        """Setting language should update highlighter."""
+        from syntax.highlighter import Language
+
+        tab = create_editor_tab()
+        qtbot.addWidget(tab)
+        tab.set_language(Language.PYTHON)
+        assert tab.language == Language.PYTHON
+
+    def test_language_detection_python(self):
+        from syntax.highlighter import Language, get_language_from_extension
+
+        assert get_language_from_extension("test.py") == Language.PYTHON
+        assert get_language_from_extension("script.pyw") == Language.PYTHON
+
+    def test_language_detection_javascript(self):
+        from syntax.highlighter import Language, get_language_from_extension
+
+        assert get_language_from_extension("app.js") == Language.JAVASCRIPT
+        assert get_language_from_extension("component.tsx") == Language.JAVASCRIPT
+
+    def test_language_detection_html(self):
+        from syntax.highlighter import Language, get_language_from_extension
+
+        assert get_language_from_extension("index.html") == Language.HTML
+        assert get_language_from_extension("page.htm") == Language.HTML
+
+    def test_language_detection_css(self):
+        from syntax.highlighter import Language, get_language_from_extension
+
+        assert get_language_from_extension("styles.css") == Language.CSS
+
+    def test_language_detection_json(self):
+        from syntax.highlighter import Language, get_language_from_extension
+
+        assert get_language_from_extension("config.json") == Language.JSON
+
+    def test_language_detection_markdown(self):
+        from syntax.highlighter import Language, get_language_from_extension
+
+        assert get_language_from_extension("README.md") == Language.MARKDOWN
+
+    def test_language_detection_plain(self):
+        from syntax.highlighter import Language, get_language_from_extension
+
+        assert get_language_from_extension("file.xyz") == Language.PLAIN
+        assert get_language_from_extension("") == Language.PLAIN
