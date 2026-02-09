@@ -6,18 +6,23 @@ MyNotion a lightweight text and code editor with AI integration. Think notepad b
 
 ## Features
 
-- **Multi-tab editing** — Open and edit multiple files simultaneously
-- **Syntax highlighting** — Python, JavaScript, JSON, HTML, CSS, Markdown
-- **Color themes** — Dark (default), Monokai, Dracula, Light, Nord, Metropolis
+- **Multi-tab editing** — Open and edit multiple files with session restore
+- **Syntax highlighting** — Python, JavaScript, JSON, HTML, CSS, Markdown, and more
+- **7 color themes** — Dark (default), Monokai, Dracula, Light, Nord, Metropolis, Win95 Dark
 - **Customizable fonts** — Choose font family and size (Consolas 12 by default)
 - **Line numbers** — With current line highlighting
+- **File browser** — Side panel for navigating project folders
+- **Find & Replace** — Ctrl+F with match highlighting
 - **Recent files** — Quick access to recently opened files
+- **Auto-save** — Configurable interval, also saves on focus loss
 - **Zoom** — Ctrl+Plus/Minus to adjust font size
-- **AI Assistant** — Local AI integration via Ollama
-  - 13 built-in prompts: Explain, Docstring, Simplify, Debug, Summarize, Fix, Improve, Translate, Refactor, Test, Custom, Examples, Transfer
-  - Works on selected code or full file
-  - "Replace" action to apply AI suggestions directly
-  - Streaming responses with code block formatting
+- **Large file support** — Files over 1 MB open with syntax highlighting disabled for performance
+- **AI Assistant** — Ollama (local) and Anthropic Claude (cloud)
+  - Chat panel with streaming responses and code block actions
+  - **Inline AI editing** (Ctrl+K) — Select code, describe the change, see a live diff
+  - **Code completion** — Copilot-style ghost text via Ollama FIM models
+  - Coding and writing modes with mode-aware prompts
+  - Context toggle to include active editor content in chat
 
 ## Screenshots
 ![MyNotion Screenshot](docs/screenshot.png) 
@@ -63,9 +68,13 @@ The executable will be in the `dist/` folder.
 | Ctrl+S | Save |
 | Ctrl+Shift+S | Save As |
 | Ctrl+W | Close tab |
+| Ctrl+F | Find & Replace |
+| Ctrl+K | Inline AI edit |
 | Ctrl+Plus | Zoom in |
 | Ctrl+Minus | Zoom out |
 | Ctrl+, | Settings |
+| Tab | Accept ghost text completion |
+| Escape | Dismiss ghost text / cancel inline edit |
 
 ### Changing Theme
 
@@ -77,10 +86,10 @@ The Metropolis theme uses these green shades (lightest to darkest):
 
 | Element | Variable | Hex |
 |---------|----------|-----|
-| Selection highlight | `selection` | `#2D5A5A` |
-| Inactive tabs | `chrome_hover` | `#1A3333` |
-| Menu bar / toolbar | `chrome_bg` | `#122424` |
-| Active tab / editor | `background` | `#0D1A1A` |
+| Selection highlight | `selection` | `#1A5050` |
+| Current line | `current_line` | `#1A3333` |
+| Active tab / editor | `background` | `#1a2a2a` |
+| Menu bar / toolbar | `chrome_bg` | `#121f1f` |
 
 Theme colors can be customized in `src/core/settings.py`.
 
@@ -88,19 +97,34 @@ Theme colors can be customized in `src/core/settings.py`.
 
 ```
 src/
-├── main.py              # Entry point
-├── app.py               # QApplication setup
-├── ui/                  # UI components
-│   ├── main_window.py   # Main window with tabs, menus, toolbar
-│   ├── editor_tab.py    # Individual editor tab widget
-│   ├── custom_tab_bar.py # Styled tab bar with close buttons
-│   └── settings_dialog.py # Settings UI
-├── core/                # Core functionality
-│   ├── settings.py      # App settings (QSettings wrapper)
-│   └── recent_files.py  # Recent files tracking
-├── ai/                  # Local AI integration (Ollama)
-└── syntax/              # Syntax highlighting
-    └── highlighter.py   # QSyntaxHighlighter implementations
+├── main.py                  # Entry point
+├── app.py                   # QApplication setup, qasync event loop
+├── ui/                      # UI components
+│   ├── main_window.py       # Main window orchestrator
+│   ├── editor_tab.py        # Editor widget with line numbers, ghost text
+│   ├── side_panel.py        # AI chat panel (coding & writing modes)
+│   ├── file_browser.py      # Project folder navigation
+│   ├── activity_bar.py      # Left sidebar icon strip
+│   ├── find_replace.py      # Find & Replace bar
+│   ├── theme_engine.py      # QSS generation and theme application
+│   ├── title_bar.py         # Custom frameless title bar
+│   ├── status_bar_manager.py    # Status bar indicators
+│   ├── inline_edit_controller.py # Ctrl+K inline AI edit lifecycle
+│   ├── completion_controller.py  # Ghost text completion manager
+│   ├── custom_tab_bar.py    # Styled tab bar with close buttons
+│   ├── settings_dialog.py   # Settings UI
+│   └── toolbar_widgets.py   # Toolbar button helpers
+├── core/                    # Non-UI logic
+│   ├── settings.py          # QSettings wrapper, theme definitions
+│   └── recent_files.py      # Recent files tracking
+├── ai/                      # AI integration
+│   ├── worker.py            # Thread-safe AI manager
+│   ├── completion.py        # FIM prompt builder for code completion
+│   └── providers/
+│       ├── ollama.py        # Ollama API client (local models)
+│       └── anthropic.py     # Anthropic API client (Claude)
+└── syntax/
+    └── highlighter.py       # QSyntaxHighlighter per language
 ```
 
 ## Development
