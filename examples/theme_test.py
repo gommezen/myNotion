@@ -21,7 +21,6 @@ def main() -> None:
 def main():
     """Main function to execute the program."""
 
-#expla****************in this code
 
 if __name__ == "__main__":
     # This is the entry point for the script when it is run directly.

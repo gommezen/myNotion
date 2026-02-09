@@ -530,11 +530,34 @@ class EditorTab(QPlainTextEdit):
         self._position_inline_edit_bar()
         self._inline_edit_bar.show_bar()
 
+        # Auto-close bar when selection is lost (clicking away)
+        self.selectionChanged.connect(self._on_selection_changed_during_inline_edit)
+
     def hide_inline_edit(self) -> None:
         """Hide the inline edit bar and clear highlights."""
+        import contextlib
+
+        # Disconnect selection watcher
+        with contextlib.suppress(TypeError):
+            self.selectionChanged.disconnect(self._on_selection_changed_during_inline_edit)
+
         if self._inline_edit_bar:
             self._inline_edit_bar.hide_bar()
         self.clear_edit_highlights()
+
+    def _on_selection_changed_during_inline_edit(self) -> None:
+        """Auto-close inline edit bar when selection is lost."""
+        if not self._inline_edit_bar or not self._inline_edit_bar.isVisible():
+            return
+        # Don't close if AI is currently generating
+        if (
+            self._inline_edit_bar._edit_complete is False
+            and self._inline_edit_bar.instruction_input.isEnabled() is False
+        ):
+            return
+        # Close bar if cursor has no selection
+        if not self.textCursor().hasSelection():
+            self.inline_edit_cancelled.emit()
 
     def get_inline_edit_bar(self):
         """Return the inline edit bar widget (or None if not created)."""

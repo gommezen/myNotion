@@ -104,6 +104,7 @@ class FindReplaceBar(QWidget):
 
         # Close button
         self.close_btn = QPushButton("✕")
+        self.close_btn.setObjectName("closeBtn")
         self.close_btn.setFixedSize(24, 24)
         self.close_btn.setToolTip("Close (Escape)")
         self.close_btn.clicked.connect(self.hide_bar)
@@ -185,6 +186,21 @@ class FindReplaceBar(QWidget):
             QCheckBox::indicator:checked {{
                 background-color: {accent};
                 border-color: {accent};
+            }}
+            QPushButton#closeBtn {{
+                background-color: transparent;
+                color: {text_dim};
+                border: none;
+                border-radius: {radius};
+            }}
+            QPushButton#closeBtn:hover {{
+                color: {text};
+                border: 1px solid {text_dim};
+            }}
+            QPushButton#closeBtn:pressed {{
+                background-color: {accent};
+                color: {bg};
+                border: 1px solid {accent};
             }}
         """)
 

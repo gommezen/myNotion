@@ -12,10 +12,13 @@ from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QLineEdit,
     QPlainTextEdit,
+    QScrollArea,
     QVBoxLayout,
+    QWidget,
 )
 
 from core.settings import THEMES, SettingsManager
@@ -81,7 +84,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.settings = SettingsManager()
         self.setWindowTitle("Settings")
-        self.setMinimumSize(500, 400)
+        self.setMinimumSize(500, 500)
         self._updating = False  # Prevent recursive updates
 
         self._setup_ui()
@@ -90,8 +93,20 @@ class SettingsDialog(QDialog):
 
     def _setup_ui(self):
         """Set up the dialog UI."""
-        layout = QVBoxLayout(self)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setSpacing(8)
+
+        # Scroll area for all settings groups
+        self._scroll_area = QScrollArea()
+        self._scroll_area.setWidgetResizable(True)
+        self._scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+
+        self._scroll_content = QWidget()
+        layout = QVBoxLayout(self._scroll_content)
         layout.setSpacing(16)
+
+        self._scroll_area.setWidget(self._scroll_content)
+        outer_layout.addWidget(self._scroll_area, stretch=1)
 
         # Theme group
         theme_group = QGroupBox("Theme")
@@ -188,7 +203,7 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(preview_group)
 
-        # Buttons
+        # Buttons (outside the scroll area)
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
             | QDialogButtonBox.StandardButton.Cancel
@@ -200,7 +215,7 @@ class SettingsDialog(QDialog):
             self._apply_settings
         )
 
-        layout.addWidget(button_box)
+        outer_layout.addWidget(button_box)
 
     @staticmethod
     def _create_x_icon(color: str) -> str:
@@ -242,25 +257,37 @@ class SettingsDialog(QDialog):
         if theme.is_beveled:
             group_border = theme.bevel_flat
             input_border = theme.bevel_sunken
-            btn_border = theme.bevel_raised
             check_border = theme.bevel_sunken
         else:
             group_border = f"border: 1px solid {chrome_border};"
             input_border = f"border: 1px solid {chrome_border};"
-            btn_border = "border: none;"
             check_border = f"border: 1px solid {chrome_border};"
+
+        dim = self._hex_to_rgba(fg, 0.6)
+        btn_bg = self._hex_to_rgba(fg, 0.06)
+        btn_hover_bg = self._hex_to_rgba(fg, 0.12)
 
         self.setStyleSheet(f"""
             QDialog {{
                 background-color: {chrome_bg};
                 color: {fg};
+                font-size: 11px;
+            }}
+            QScrollArea {{
+                background-color: {chrome_bg};
+                border: none;
+            }}
+            QScrollArea > QWidget > QWidget {{
+                background-color: {chrome_bg};
             }}
             QGroupBox {{
                 color: {fg};
                 {group_border}
                 border-radius: {radius};
-                margin-top: 8px;
-                padding-top: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+                font-size: 11px;
+                font-weight: bold;
             }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
@@ -272,9 +299,10 @@ class SettingsDialog(QDialog):
                 color: {fg};
                 {input_border}
                 border-radius: {radius};
-                padding: 4px 8px;
-                min-height: 20px;
+                padding: 3px 8px;
+                min-height: 18px;
                 min-width: 150px;
+                font-size: 11px;
             }}
             QComboBox:hover {{
                 border-color: {accent};
@@ -288,17 +316,20 @@ class SettingsDialog(QDialog):
                 color: {fg};
                 selection-background-color: {selection};
                 outline: none;
+                font-size: 11px;
             }}
             QLabel {{
-                color: {fg};
+                color: {dim};
+                font-size: 11px;
             }}
             QLineEdit {{
                 background-color: {bg};
                 color: {fg};
                 {input_border}
                 border-radius: {radius};
-                padding: 4px 8px;
-                min-height: 20px;
+                padding: 3px 8px;
+                min-height: 18px;
+                font-size: 11px;
             }}
             QLineEdit:hover {{
                 border-color: {accent};
@@ -307,29 +338,35 @@ class SettingsDialog(QDialog):
                 border-color: {accent};
             }}
             QPushButton {{
-                background-color: {self._hex_to_rgba(accent, 0.8)};
-                color: {fg};
-                {btn_border}
+                background-color: {btn_bg};
+                color: {dim};
+                border: 1px solid {chrome_border};
                 border-radius: {radius};
-                padding: 6px 16px;
-                min-width: 80px;
+                padding: 5px 14px;
+                min-width: 70px;
+                font-size: 11px;
             }}
             QPushButton:hover {{
-                background-color: {accent};
+                background-color: {btn_hover_bg};
+                color: {fg};
+                border-color: {accent};
             }}
             QPushButton:pressed {{
-                background-color: {selection};
+                background-color: {accent};
+                color: {bg};
+                border-color: {accent};
             }}
             QDialogButtonBox QPushButton {{
-                min-width: 70px;
+                min-width: 65px;
             }}
             QCheckBox {{
                 color: {fg};
                 spacing: 8px;
+                font-size: 11px;
             }}
             QCheckBox::indicator {{
-                width: 16px;
-                height: 16px;
+                width: 14px;
+                height: 14px;
                 {check_border}
                 border-radius: {radius};
                 background-color: {bg};

@@ -5,6 +5,7 @@ Main application window with tabs, menus, and toolbar.
 import contextlib
 import ctypes
 import sys
+import time
 from pathlib import Path
 
 from PyQt6.QtCore import (
@@ -26,6 +27,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QDockWidget,
     QFileDialog,
+    QFrame,
     QGraphicsOpacityEffect,
     QLabel,
     QMainWindow,
@@ -80,6 +82,9 @@ class MainWindow(QMainWindow):
         self._apply_theme()
         self._apply_child_themes()
         self._restore_geometry()
+
+        # Track manual layout mode switches (30s cooldown for auto-switch)
+        self._last_manual_mode_switch: float = 0.0
 
         # Connect recent files changes
         self.recent_files.files_changed.connect(self._update_recent_menu)
@@ -531,6 +536,9 @@ class MainWindow(QMainWindow):
         self._resize_origin = QPoint()
         self._resize_geo = self.geometry()
 
+        # Enable native Win+Arrow snapping on Windows
+        self._enable_native_snapping()
+
         # Set MyNotion icon for taskbar
         icon_path = self._get_resource_path("mynotion.ico")
         if icon_path.exists():
@@ -578,6 +586,26 @@ class MainWindow(QMainWindow):
 
         # Initial position update
         self._update_new_tab_button_position()
+
+    def _enable_native_snapping(self):
+        """Add WS_THICKFRAME to enable native Win+Arrow snapping on Windows.
+
+        This adds the thick-frame window style (used for resizable windows)
+        which enables Windows Aero Snap (Win+Arrow) on frameless windows.
+        """
+        if sys.platform != "win32":
+            return
+        try:
+            hwnd = int(self.winId())
+            # GWL_STYLE = -16
+            style = ctypes.windll.user32.GetWindowLongW(hwnd, -16)
+            # WS_THICKFRAME = 0x00040000 (enables resize + snap)
+            # WS_MAXIMIZEBOX = 0x00010000 (enables Win+Up maximize)
+            # WS_MINIMIZEBOX = 0x00020000 (enables Win+Down minimize)
+            style |= 0x00040000 | 0x00010000 | 0x00020000
+            ctypes.windll.user32.SetWindowLongW(hwnd, -16, style)
+        except Exception:
+            pass  # Silently ignore on unsupported platforms
 
     def _wrap_tab_inserted(self, original_func):
         """Wrap tabInserted to update + button position."""
@@ -968,6 +996,13 @@ class MainWindow(QMainWindow):
 
         # Help menu
         help_menu = menubar.addMenu(self.tr("&Help"))
+
+        shortcuts_action = QAction(self.tr("Keyboard Shortcuts"), self)
+        shortcuts_action.setShortcut(QKeySequence("F1"))
+        shortcuts_action.triggered.connect(self._show_keyboard_shortcuts)
+        help_menu.addAction(shortcuts_action)
+
+        help_menu.addSeparator()
 
         about_action = QAction(self.tr("About MyNotion"), self)
         about_action.triggered.connect(self._show_about)
@@ -1819,6 +1854,8 @@ class MainWindow(QMainWindow):
             self.find_bar.set_editor(editor)
             # Update window title with current filename
             self._update_window_title()
+            # Auto-switch layout mode based on language (with 30s cooldown)
+            self._auto_switch_layout_mode(editor)
             # Apply fade-in transition
             self._animate_tab_transition(editor)
 
@@ -1937,10 +1974,51 @@ class MainWindow(QMainWindow):
         else:
             self.writing_mode_action.setChecked(True)
 
-    def _apply_layout_mode(self, mode: LayoutMode):
-        """Apply layout mode to settings and side panel."""
+    def _apply_layout_mode(self, mode: LayoutMode, manual: bool = True):
+        """Apply layout mode to settings and side panel.
+
+        Args:
+            mode: The layout mode to apply.
+            manual: If True, records a cooldown to prevent auto-switching.
+        """
+        if manual:
+            self._last_manual_mode_switch = time.monotonic()
         self.settings_manager.set_layout_mode(mode.value)
         self.side_panel.set_layout_mode(mode)
+
+    def _auto_switch_layout_mode(self, editor: EditorTab) -> None:
+        """Auto-switch layout mode based on the editor's language.
+
+        Skips if the user manually toggled mode in the last 30 seconds.
+        """
+        # Don't auto-switch if user recently manually changed mode
+        if time.monotonic() - self._last_manual_mode_switch < 30:
+            return
+
+        target_mode = self._get_layout_mode_for_language(editor.language)
+        current_mode = self.side_panel.get_layout_mode()
+
+        if target_mode != current_mode:
+            self._apply_layout_mode(target_mode, manual=False)
+            # Update menu checkmarks
+            if target_mode == LayoutMode.CODING:
+                self.coding_mode_action.setChecked(True)
+            else:
+                self.writing_mode_action.setChecked(True)
+
+    @staticmethod
+    def _get_layout_mode_for_language(language: Language) -> LayoutMode:
+        """Return the appropriate layout mode for a file language."""
+        code_languages = {
+            Language.PYTHON,
+            Language.JAVASCRIPT,
+            Language.HTML,
+            Language.CSS,
+            Language.JSON,
+        }
+        if language in code_languages:
+            return LayoutMode.CODING
+        return LayoutMode.WRITING
 
     def _update_recent_menu(self):
         """Update the recent files menu."""
@@ -2206,6 +2284,100 @@ class MainWindow(QMainWindow):
             about_box.setIconPixmap(QPixmap.fromImage(image))
 
         about_box.exec()
+
+    def _show_keyboard_shortcuts(self):
+        """Show a themed dialog listing all keyboard shortcuts."""
+        from PyQt6.QtWidgets import QDialog, QTextBrowser, QVBoxLayout
+
+        theme = self.settings_manager.get_current_theme()
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(self.tr("Keyboard Shortcuts"))
+        dialog.setMinimumSize(420, 500)
+
+        dlg_layout = QVBoxLayout(dialog)
+        dlg_layout.setContentsMargins(0, 0, 0, 0)
+
+        browser = QTextBrowser()
+        browser.setFrameShape(QFrame.Shape.NoFrame)
+        browser.setOpenExternalLinks(False)
+
+        accent = theme.keyword
+        fg = theme.foreground
+        bg = theme.background
+        dim = self._hex_to_rgba(fg, 0.55)
+        kbd_bg = self._hex_to_rgba(fg, 0.08)
+        kbd_border = self._hex_to_rgba(fg, 0.15)
+
+        shortcuts_html = f"""
+        <style>
+            body {{ background: {bg}; color: {fg}; font-family: Consolas, monospace; font-size: 9px; padding: 12px; }}
+            h2 {{ color: {accent}; font-size: 10px; margin: 14px 0 6px 0; border-bottom: 1px solid {kbd_border}; padding-bottom: 3px; }}
+            table {{ width: 100%; border-collapse: collapse; }}
+            td {{ padding: 3px 6px; vertical-align: top; font-size: 9px; }}
+            td:first-child {{ color: {dim}; width: 55%; }}
+            .kbd {{ background: {kbd_bg}; border: 1px solid {kbd_border}; border-radius: 3px; padding: 1px 5px; font-size: 8px; }}
+        </style>
+        <h2>File</h2>
+        <table>
+        <tr><td>New tab</td><td><span class="kbd">Ctrl+N</span></td></tr>
+        <tr><td>Open file</td><td><span class="kbd">Ctrl+O</span></td></tr>
+        <tr><td>Open folder</td><td><span class="kbd">Ctrl+Shift+O</span></td></tr>
+        <tr><td>Save</td><td><span class="kbd">Ctrl+S</span></td></tr>
+        <tr><td>Save as</td><td><span class="kbd">Ctrl+Shift+S</span></td></tr>
+        </table>
+
+        <h2>Edit</h2>
+        <table>
+        <tr><td>Undo</td><td><span class="kbd">Ctrl+Z</span></td></tr>
+        <tr><td>Redo</td><td><span class="kbd">Ctrl+Y</span></td></tr>
+        <tr><td>Cut / Copy / Paste</td><td><span class="kbd">Ctrl+X/C/V</span></td></tr>
+        <tr><td>Find</td><td><span class="kbd">Ctrl+F</span></td></tr>
+        <tr><td>Replace</td><td><span class="kbd">Ctrl+H</span></td></tr>
+        </table>
+
+        <h2>AI</h2>
+        <table>
+        <tr><td>Inline AI edit</td><td><span class="kbd">Ctrl+K</span></td></tr>
+        <tr><td>Toggle AI completion</td><td><span class="kbd">Ctrl+Shift+Space</span></td></tr>
+        <tr><td>Toggle side panel</td><td><span class="kbd">Ctrl+Shift+A</span></td></tr>
+        </table>
+
+        <h2>View</h2>
+        <table>
+        <tr><td>Zoom in</td><td><span class="kbd">Ctrl++</span></td></tr>
+        <tr><td>Zoom out</td><td><span class="kbd">Ctrl+-</span></td></tr>
+        <tr><td>Toggle layout mode</td><td><span class="kbd">Ctrl+Shift+M</span></td></tr>
+        <tr><td>Settings</td><td><span class="kbd">Ctrl+,</span></td></tr>
+        <tr><td>Keyboard shortcuts</td><td><span class="kbd">F1</span></td></tr>
+        </table>
+
+        <h2>Completion</h2>
+        <table>
+        <tr><td>Accept suggestion</td><td><span class="kbd">Tab</span></td></tr>
+        <tr><td>Accept first line</td><td><span class="kbd">Ctrl+Right</span></td></tr>
+        <tr><td>Dismiss suggestion</td><td><span class="kbd">Esc</span></td></tr>
+        </table>
+        """
+
+        browser.setHtml(shortcuts_html)
+
+        browser.setStyleSheet(f"""
+            QTextBrowser {{
+                background-color: {bg};
+                color: {fg};
+                border: none;
+            }}
+        """)
+
+        dialog.setStyleSheet(f"""
+            QDialog {{
+                background-color: {bg};
+            }}
+        """)
+
+        dlg_layout.addWidget(browser)
+        dialog.exec()
 
     def _apply_settings_to_editors(self):
         """Apply changed settings to all editor tabs and window chrome."""

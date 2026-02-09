@@ -91,28 +91,28 @@ AI_PROMPTS = [
     {
         "label": "Explain",
         "icon": "◎",
-        "prompt": "Explain this code in detail",
+        "prompt": "Provide a brief, concise explanation of this code in 2-3 sentences maximum. Be direct",
         "tip": "Describe what the code does and how it works",
         "modes": ["coding"],
     },
     {
         "label": "Docstring",
         "icon": "☰",
-        "prompt": "Add Google-style docstrings to this code. Return the complete code with docstrings added",
+        "prompt": "Add Google-style docstrings to every function and class. Return ONLY the complete code with docstrings added. No explanations",
         "tip": "Add documentation strings to functions/classes",
         "modes": ["coding"],
     },
     {
         "label": "Debug",
         "icon": "⚡",
-        "prompt": "Find bugs and potential issues in this code",
+        "prompt": "List each bug or issue concisely with line references. Be direct and professional — no lengthy analysis",
         "tip": "Find bugs and potential issues",
         "modes": ["coding"],
     },
     {
         "label": "Fix",
         "icon": "✓",
-        "prompt": "Fix any errors or issues in this code. Return the corrected code",
+        "prompt": "Fix all errors in this code. Return ONLY the corrected code. No explanations, no markdown fences",
         "tip": "Correct errors and issues in code",
         "modes": ["coding"],
     },
@@ -523,7 +523,7 @@ class SidePanel(QWidget):
         self.context_requested.emit(prompt["prompt"])
 
     def _generate_more_examples(self):
-        """Generate more examples based on code in the last AI response."""
+        """Generate more examples based on code/text in the last AI response."""
         if not self._current_ai_response:
             self.append_message("system", "[No AI response to generate examples from]")
             return
@@ -537,11 +537,20 @@ class SidePanel(QWidget):
             )
             self.append_message("user", "[More examples...]")
             self._start_ai_generation(prompt)
+        elif self._layout_mode == LayoutMode.WRITING:
+            # Writing mode: generate alternative versions of the text
+            prompt = (
+                f"Here is the original text:\n\n{self._current_ai_response}\n\n"
+                f"Write 2-3 alternative versions with different wording or structure. "
+                f"Separate each version with a blank line. Return only the alternatives."
+            )
+            self.append_message("user", "[Alternative versions...]")
+            self._start_ai_generation(prompt)
         else:
-            # No code blocks, use the full response
+            # Coding mode with no code blocks — generic examples
             prompt = (
                 f"Based on this:\n\n{self._current_ai_response}\n\n"
-                f"Please give me more examples or variations."
+                f"Please give me 2-3 more code examples or variations."
             )
             self.append_message("user", "[More examples...]")
             self._start_ai_generation(prompt)
@@ -556,7 +565,20 @@ class SidePanel(QWidget):
             "",
         )
         if ok and text.strip():
-            prompt = text.strip()
+            user_instruction = text.strip()
+            # Wrap with action-oriented instructions so AI modifies code/text
+            if self._layout_mode == LayoutMode.CODING:
+                prompt = (
+                    f"{user_instruction}\n\n"
+                    f"Apply this instruction to the code. "
+                    f"Return ONLY the modified code. No explanations."
+                )
+            else:
+                prompt = (
+                    f"{user_instruction}\n\n"
+                    f"Apply this instruction to the text. "
+                    f"Return ONLY the modified text. No explanations."
+                )
             # Request context from main window - it will call execute_prompt_with_context
             self.context_requested.emit(prompt)
 
@@ -728,6 +750,8 @@ class SidePanel(QWidget):
             action = url_str.split(":")[1]
             if action == "continue":
                 self._continue_generation()
+            elif action == "clear":
+                self._clear_chat()
             elif action == "copy_text":
                 self._handle_text_action("copy")
             elif action == "insert_text":
@@ -796,6 +820,13 @@ class SidePanel(QWidget):
             )
             self.append_message("user", "[Continue...]")
             self._start_ai_generation(prompt)
+
+    def _clear_chat(self):
+        """Clear the chat area and reset response state."""
+        self.chat_area.clear()
+        self._current_ai_response = ""
+        self._chat_html_before_response = ""
+        self._code_blocks = []
 
     def execute_prompt_with_context(
         self, prompt: str, context: str | None, is_selection: bool = False
@@ -1014,13 +1045,16 @@ class SidePanel(QWidget):
                 text_actions_html += "</p>"
                 self.chat_area.append(text_actions_html)
 
-            # Add "Continue" link after response
-            continue_html = (
+            # Add "Continue" and "Clear" links after response
+            footer_html = (
                 '<p style="margin: 8px 0 5px 0;">'
                 '<a href="action:continue" style="color: #7fbf8f; text-decoration: none; '
-                'font-size: 10px;">▶ Continue generating...</a></p>'
+                'font-size: 10px;">▶ Continue</a>'
+                "&nbsp;&nbsp;&nbsp;"
+                '<a href="action:clear" style="color: rgba(180,210,190,0.35); '
+                'text-decoration: none; font-size: 10px;">✕ Clear</a></p>'
             )
-            self.chat_area.append(continue_html)
+            self.chat_area.append(footer_html)
 
     def _on_ai_error(self, error: str):
         """Handle AI generation error."""
@@ -1078,21 +1112,27 @@ class SidePanel(QWidget):
         last_end = 0
 
         for block_index, match in enumerate(re.finditer(code_block_pattern, text, re.DOTALL)):
-            # Add escaped text before this code block
+            # Add escaped text before this code block (with line breaks)
             before_text = text[last_end : match.start()]
             if before_text:
-                result_parts.append(html.escape(before_text))
+                result_parts.append(self._format_plain_text(before_text))
 
             # Add formatted code block with actions
             result_parts.append(format_code_block(match, block_index))
             last_end = match.end()
 
-        # Add remaining text after last code block
+        # Add remaining text after last code block (with line breaks)
         remaining = text[last_end:]
         if remaining:
-            result_parts.append(html.escape(remaining))
+            result_parts.append(self._format_plain_text(remaining))
 
         return "".join(result_parts)
+
+    @staticmethod
+    def _format_plain_text(text: str) -> str:
+        """Escape HTML and convert newlines to <br> for readable display."""
+        escaped = html.escape(text)
+        return escaped.replace("\n", "<br>")
 
     def _update_ai_response(self, text: str):
         """Update the current AI response in the chat area."""
